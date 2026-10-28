@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 export const campCategories = [
   {
     id: "general",
@@ -108,29 +107,3 @@ export const campCategories = [
 export function createCamp(id, title, date) {
   return { id, title, created: date, fields: { title }, updated: Date.now() };
 }
-export function campWorkbook(camp, patrol) {
-  const wb = XLSX.utils.book_new();
-  for (const c of campCategories) {
-    const rows = [
-      ["Dossier de camp", camp.fields.title || camp.title],
-      ["Patrouille", patrol],
-      [],
-      ["Catégorie", c.name],
-      [],
-      ["Information", "Réponse"],
-      ...c.fields.map(([key, label]) => [label, camp.fields[key] ?? ""]),
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{ wch: 42 }, { wch: 90 }];
-    XLSX.utils.book_append_sheet(
-      wb,
-      ws,
-      c.name.replace(/[\\/?*\[\]:]/g, "").slice(0, 31),
-    );
-  }
-  return wb;
-}
-export const excelBlob = (wb) =>
-  new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });

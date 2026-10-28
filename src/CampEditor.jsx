@@ -55,7 +55,8 @@ export default function CampEditor({
           <h2>Dossiers de camp · {patrol}</h2>
           <p>
             Choisissez une catégorie, remplissez les champs, enregistrez. Votre
-            Excel est créé automatiquement dans Drive.
+            Excel se télécharge depuis ce dossier, puis se dépose manuellement
+            sur Drive.
           </p>
         </div>
         {!camp && (

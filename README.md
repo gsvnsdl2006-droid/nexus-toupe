@@ -1,46 +1,38 @@
 # Nexus · Troupe Orion
 
-Dark green, mobile-first patrol workspace for Goélands, Lions, Guépards, Orcs, Renards and Taureaux. React + Vite; Node 22.12+ or 24 recommended.
+Application en français, mobile, pour Goélands, Lions, Guépards, Orcs, Renards et Taureaux. Node 24 recommandé.
 
-## Run
+## Démarrage
 
 ```sh
 npm ci --cache /tmp/nexus-npm-cache
 npm run dev -- --port 5173
-```
-
-```sh
 npm run build
 npm test
 npx playwright test
+npx playwright test --config playwright.access.config.js
 ```
 
-Playwright is configured for `/usr/bin/chromium` in the cloud environment. Set a different executable in `playwright.config.js` on another machine. Browser tests start the development server automatically unless TEST_BASE_URL targets an existing production server. Build output is `dist/`; deploy that directory to a static host with HTTPS. No backend or application secrets are required for local operation.
+Playwright démarre le serveur de développement automatiquement et utilise `/usr/bin/chromium`. Pour tester une compilation déjà servie : `TEST_BASE_URL=http://127.0.0.1:4173 npx playwright test`. Netlify compile avec `npm run build` et publie `dist/`.
 
-## What works
+## Sauvegarde et exports manuels
 
-- Independent cashflow workbooks per patrol with the original four activity tabs, income, expense and net cash totals; Excel export.
-- Simplified camp folders with ten clickable categories (general information, team, goals, programme, preparations, contacts, menus, budget, equipment, evaluation). Save a category to update its real `.xlsx` workbook automatically in Drive under the patrol’s `Dossiers de camp/<name> [id]` folder. Download the generated workbook directly from the camp. Existing legacy cell edits are preserved and remain downloadable as an old workbook; the original uploaded templates remain unchanged.
-- Visual attendance dashboard: six patrol comparison bars, a per-patrol attendance ring and individual member bars, with exact counts retained underneath. Empty data displays “no attendance” rather than a fabricated rate.
-- Members entered once, dated meetings with editable reports and attendance stored together, attendance statistics which exclude meetings where the member was not yet listed.
-- Four progression stages plus the 93 badge names supplied by the troupe (no prices or brevets de capacités), individual notes and up to three photos per accomplishment.
-- IndexedDB persistence, full JSON export/import, and configurable header logos. The bundled Nexus/Orion header artwork and six patrol pennants are cleaned renderings based on the troupe’s supplied images. Renards intentionally retains the visible dark folded pennant. Patrol slogans and colour accents are built in. Custom header images can still be uploaded in Archives & Drive.
-- Self-hosted bundled fonts; no runtime font CDN dependency.
+**Aucune connexion Google Drive ni synchronisation Drive.** L'ancienne intégration OAuth a été retirée. Le jeton de l'ancienne session est effacé au chargement. Les anciens fichiers Drive ne sont pas supprimés.
 
-## Google Drive connection
+Les saisies sont enregistrées sur l'appareil dans IndexedDB. Les rapports de réunion se téléchargent en **véritables fichiers Word .docx**, avec le rapport et le tableau des présences. Les présences se téléchargent aussi en **Excel .xlsx**, pour une réunion ou l'ensemble des réunions. L'utilisateur dépose lui-même les fichiers sur son Drive.
 
-Being signed into Gmail or another web app does not configure this app's OAuth client. Use `gsvnsdl2006@gmail.com` in the Google connection dialog if that is the archive owner.
+La trésorerie affiche les dollars américains ($). Les classeurs Excel ont titres, totaux calculés, formats monétaires, tableaux filtrables et lignes alternées. Les dossiers de camp utilisent dix catégories avec exports Excel mis en page, couleurs de troupe, texte renvoyé à la ligne et réglages d'impression. Les anciennes cellules du modèle original restent exportables séparément.
 
-1. In Google Cloud, create or reuse a **Web application OAuth client**, enable **Google Drive API**, configure the OAuth consent screen and add intended users if the app is in testing.
-2. Add the exact deployed app origin (and the local development origin when testing) under **Authorized JavaScript origins**. This uses the Google Identity Services token flow and requires no client secret or redirect endpoint.
-3. Paste the public client ID into Archives & Drive, then Connecter Google. The client ID is saved in this browser; the short-lived access token is retained in this tab’s sessionStorage until expiry/disconnection, so refreshing the same tab can resume without opening Settings. It is never stored in localStorage. The app requests only `drive.file` access to files created/opened by this application.
-4. **Automatic archiving is always active.** After connection, edits are batched for 2.5 seconds and then uploaded while the app is open. A status chip shows pending/uploaded/offline/reconnect states. An expired Google token pauses uploads and asks you to reconnect; an unexpired tab session reconnects automatically after a page refresh. An inline Connecter Drive button is available throughout the app, including member/meeting/camp flows; opening Settings to save is unnecessary. The archive creates a `Nexus Troupe Orion` folder with six patrol subfolders, each containing a converted Google Sheets cashflow workbook, a converted camp workbook, Google Docs meeting reports including attendance, and progression photos/JSON. A complete `nexus-backup.json` at the root supports restore, including photos and logo configuration.
-5. On a fresh browser, connecting the same Google account reads and restores the existing archive before enabling uploads. If both the device and Drive have pending changes, automatic uploading pauses for a version choice. Export local work before replacing data.
+Chaque membre peut recevoir une photo. Chaque badge/étape peut recevoir une image propre, distincte des photos de ses réalisations. Les données, images et logos sont inclus dans l'export JSON complet (Archives & exports). Importer cet export sur un autre appareil permet de reprendre les carnets. Les fichiers Excel/Word ne remplacent pas la sauvegarde JSON des images.
 
-**Current boundary:** Drive synchronization is automatic while the app is open, Google is connected, using its unexpired tab session. New members are also archived as a patrol members JSON file. A single upload runs at a time; later edits queue for the next upload. Only changed patrol content is re-uploaded, with a complete JSON backup written last. Network failures retry with backoff (up to three retries) and pending local work survives reloads; returning online resets retry eligibility. A preflight archive-revision check pauses an upload when another device has changed the archive. This is a best-effort conflict check, not an atomic multi-user transaction or real-time collaboration. There is no concurrent-user merge, role-based authorization, or secure member login: selecting a member name opens a notebook. Do not use this version as a public shared multi-user system for private youth records. For that workflow, add server-side authentication, patrol permissions and conflict-safe shared storage before rollout. Local browser data can be lost when browser storage is cleared: check the saved-to-Drive status or export regularly. Deleting an item locally does not delete existing historical Drive files. Existing OAuth access in another app cannot be imported by this one.
+## Restriction par e-mail — activation à terminer
 
-## Validation and deployment
+La connexion par code e-mail Supabase est distincte de Google Drive et mémorise la session. Les règles RLS protègent les données distantes de trésorerie/secrétariat. Voir [supabase/README.md](supabase/README.md) et exécuter [supabase/setup.sql](supabase/setup.sql).
 
-Unit tests cover cashflow aggregation, patrol isolation and attendance denominators. Browser tests exercise members, cashflow, linked reports/attendance, progression/photos, reload persistence, camp edits, and mobile viewport bounds. Live Google OAuth and API operations need the configured client and user consent and cannot be verified just by a successful build. The tests do not claim that external integration works before that step. Mocked browser checks cover automatic uploads, edits during an in-flight upload, Google session expiry, restoring a fresh device, creating camp folders and inspecting their actual Excel uploads, and reconnecting after page refresh without revisiting Settings.
+Les deux maîtrises confirmées sont prévues dans le SQL : `gsvnsdl2006@gmail.com` et `troupeoriongsvn@gmail.com`. Les six adresses de patrouille confirmées sont également dans le SQL. Il reste à ajouter la configuration publique du projet Supabase (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`). Aucune clé secret/service_role ne doit apparaître dans le frontend.
 
-Publishing the source to GitHub does not deploy the app or create a Google Drive archive. Deploy through Netlify, then configure the OAuth origin and connect Drive in the app.
+**Sans cette configuration, la restriction n'est pas active.** Un message l'indique dans les deux sections ; l'application conserve le mode local. Une fois configurée, une connexion vérifiée et une entrée d'accès côté base sont nécessaires : saisir simplement une adresse ne donne pas accès. Les clients ne peuvent pas modifier les autorisations. Les anciennes copies locales et exports ne sont pas chiffrés ou effacés par la nouvelle protection. La progression reste locale sans connexion.
+
+## Validation
+
+Les tests couvrent l'isolation des patrouilles, les taux de présence, la lecture effective des classeurs exportés (données, formules, styles), les rapports Word, les photos, la persistance et l'affichage mobile. L'accès réel par e-mail doit être validé sur un projet Supabase configuré, avec les politiques RLS appliquées et l'envoi de codes opérationnel ; aucun test local ne prouve à lui seul cette activation.

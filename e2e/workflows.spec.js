@@ -91,7 +91,7 @@ test("patrol workflows persist and remain isolated", async ({ page }) => {
     .click();
   const file = await downloaded;
   const wb = XLSX.read(await readFile(await file.path()));
-  expect(wb.Sheets["Objectifs"].B7.v).toBe("Autonomie de la patrouille");
+  expect(wb.Sheets["Objectifs"].B5.v).toBe("Autonomie de la patrouille");
   expect(wb.SheetNames).toHaveLength(10);
   await page.getByRole("button", { name: "Toutes les patrouilles" }).click();
   await page.getByRole("button", { name: /PATROUILLE 02/ }).click();

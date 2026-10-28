@@ -1,5 +1,15 @@
+import AccessGate from "./AccessGate";
+import usePrivateAccess from "./usePrivateAccess";
+import { privatePayload } from "./access";
+import ImageUpload from "./ImageUpload";
+import {
+  cashflowExcel,
+  campExcel,
+  attendanceExcel,
+  meetingWord,
+} from "./exports";
 import CampEditor from "./CampEditor";
-import { campWorkbook, excelBlob } from "./camp";
+
 import { AttendanceOverview, MemberAttendance } from "./AttendanceCharts";
 import { slogans } from "./patrols.js";
 import "@fontsource-variable/dm-sans";
@@ -46,12 +56,16 @@ import {
   attendance,
   validBackup,
 } from "./model";
-import * as drive from "./drive";
+
 import "./style.css";
 import "./dark.css";
 const icons = [Bird, Flame, Compass, Shield, Leaf, Mountain];
 const money = (n) =>
-  new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(n);
+  new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "USD",
+    currencyDisplay: "narrowSymbol",
+  }).format(n);
 const readFile = (file) =>
   new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -60,18 +74,6 @@ const readFile = (file) =>
     r.readAsDataURL(file);
   });
 function App() {
-  const syncing = useRef(false);
-  const remoteSnapshot = useRef(null);
-  const retries = useRef(0);
-  const autoSync = true;
-  const [archivedRevision, setArchivedRevision] = useState(
-    Number(localStorage.getItem("nexus-archived-revision") || 0),
-  );
-  const [cloudStatus, setCloudStatus] = useState("Connecter Google");
-  const [conflict, setConflict] = useState(false);
-  const [retryTick, setRetryTick] = useState(0);
-  const [online, setOnline] = useState(navigator.onLine);
-
   const [data, setData] = useState(null),
     [patrol, selectPatrol] = useState(null),
     [section, setSection] = useState("overview"),
@@ -79,18 +81,36 @@ function App() {
     [modal, setModal] = useState(null),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
-    [connected, setConnected] = useState(false),
-    [client, setClient] = useState(
-      localStorage.getItem("nexus-google-client") || "",
-    ),
-    [lastSync, setLastSync] = useState(
-      localStorage.getItem("nexus-last-sync") || "",
-    ),
     [saveState, setSaveState] = useState("Enregistré sur cet appareil"),
     [member, setMember] = useState(""),
     [search, setSearch] = useState(""),
     [activity, setActivity] = useState(activities[0]);
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const access = usePrivateAccess(patrol, async (payload) => {
+    const current = dataRef.current;
+    if (!current) return;
+    const previous = privatePayload(current.patrols[patrol]);
+    if (JSON.stringify(previous) !== JSON.stringify(payload)) {
+      const key = `nexus-private-backup-${patrol}`;
+      const history = (await get(key)) || [];
+      await set(
+        key,
+        [{ date: Date.now(), payload: previous }, ...history].slice(0, 3),
+      );
+    }
+    setData((latest) => {
+      if (!latest) return latest;
+      const next = structuredClone(latest);
+      Object.assign(next.patrols[patrol], payload);
+      set("nexus-data", next).catch(() =>
+        notify("Impossible de sauvegarder la copie locale."),
+      );
+      return next;
+    });
+  });
   useEffect(() => {
+    sessionStorage.removeItem("nexus-drive-session");
     get("nexus-data")
       .then((d) => {
         if (d?.badges?.every((b) => b.includes("à nommer"))) {
@@ -122,48 +142,32 @@ function App() {
         setSaveState("Échec de sauvegarde");
         notify("Stockage plein ou indisponible. Exportez vos données.");
       });
+    return next;
   }
   function patch(fn) {
-    update((d) => fn(d.patrols[patrol]));
+    const next = update((d) => fn(d.patrols[patrol]));
+    if (
+      access.authorized &&
+      JSON.stringify(privatePayload(next.patrols[patrol])) !==
+        JSON.stringify(privatePayload(data.patrols[patrol]))
+    )
+      access.save(next.patrols[patrol]);
   }
-  async function workbook(kind, name, snapshot = data, camp) {
-    if (kind === "camp-form") return excelBlob(campWorkbook(camp, name));
-    const b = await (await fetch(`/templates/${kind}.xlsx`)).arrayBuffer();
-    const wb = XLSX.read(b);
+  async function workbook(kind, name, snapshot = data) {
     const p = snapshot.patrols[name];
-    if (kind === "cashflow") {
-      for (const a of activities) {
-        const rows = p.transactions.filter((t) => t.activity === a);
-        const list = [
-          ["Name", "In", "Out", "Date"],
-          ...rows.map((t) => [
-            t.description,
-            t.type === "in" ? Number(t.amount) : 0,
-            t.type === "out" ? Number(t.amount) : 0,
-            t.date,
-          ]),
-        ];
-        const t = totals(rows);
-        list.push(
-          [],
-          ["Total In", t.income],
-          ["Total Out", t.expense],
-          ["Net Cash", t.income - t.expense],
-        );
-        wb.Sheets[a] = XLSX.utils.aoa_to_sheet(list);
-      }
-    } else {
-      for (const [sheet, cells] of Object.entries(p.camp)) {
-        for (const [ref, value] of Object.entries(cells)) {
-          wb.Sheets[sheet][ref] = { t: "s", v: value };
-          const range = XLSX.utils.decode_range(
-            wb.Sheets[sheet]["!ref"] || "A1",
-          );
-          const cell = XLSX.utils.decode_cell(ref);
-          range.e.r = Math.max(range.e.r, cell.r);
-          range.e.c = Math.max(range.e.c, cell.c);
-          wb.Sheets[sheet]["!ref"] = XLSX.utils.encode_range(range);
-        }
+    if (kind === "cashflow")
+      return cashflowExcel(name, p.transactions, activities);
+    const wb = XLSX.read(
+      await (await fetch("/templates/camp.xlsx")).arrayBuffer(),
+    );
+    for (const [sheet, cells] of Object.entries(p.camp)) {
+      for (const [ref, value] of Object.entries(cells)) {
+        wb.Sheets[sheet][ref] = { t: "s", v: value };
+        const range = XLSX.utils.decode_range(wb.Sheets[sheet]["!ref"] || "A1");
+        const cell = XLSX.utils.decode_cell(ref);
+        range.e.r = Math.max(range.e.r, cell.r);
+        range.e.c = Math.max(range.e.c, cell.c);
+        wb.Sheets[sheet]["!ref"] = XLSX.utils.encode_range(range);
       }
     }
     return new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })], {
@@ -187,208 +191,30 @@ function App() {
       setBusy(false);
     }
   }
-  async function archive(snapshot, force = false) {
-    if (syncing.current || !connected || !online) return;
-    syncing.current = true;
-    setCloudStatus("Archivage en cours…");
-    try {
-      const stamp = await drive.sync(
-        snapshot,
-        (kind, name, camp) => workbook(kind, name, snapshot, camp),
-        force
-          ? {}
-          : {
-              expectedRevision: remoteSnapshot.current?.updated ?? null,
-              previous: remoteSnapshot.current,
-            },
-      );
-      remoteSnapshot.current = snapshot;
-      setArchivedRevision(snapshot.updated);
-      localStorage.setItem("nexus-archived-revision", String(snapshot.updated));
-      setLastSync(stamp);
-      localStorage.setItem("nexus-last-sync", stamp);
-      retries.current = 0;
-      setCloudStatus("À jour sur Drive");
-    } catch (e) {
-      if (e.code === "AUTH") {
-        setConnected(false);
-        setCloudStatus("Google à reconnecter");
-      } else if (e.code === "CONFLICT") {
-        setConflict(true);
-        setCloudStatus("Deux versions à vérifier");
-      } else {
-        retries.current += 1;
-        setCloudStatus(
-          retries.current <= 3
-            ? "Échec réseau · nouvelle tentative prévue"
-            : "Archivage suspendu · réessayer",
-        );
-      }
-      notify(e.message);
-    } finally {
-      syncing.current = false;
-      setRetryTick((n) => n + 1);
-    }
-  }
-  async function sync() {
-    if (
-      conflict &&
-      !confirm(
-        "Remplacer la version Drive par les données de cet appareil ? Exportez les deux versions avant de continuer.",
-      )
-    )
-      return;
-    retries.current = 0;
-    if (conflict) setConflict(false);
-    await archive(data, conflict);
-  }
-  async function connectDrive(resume = false) {
-    setConnected(false);
-    if (!resume) await drive.connect(client);
-    // Read the existing archive before enabling uploads on a new device.
-    const remote = await drive.readArchive();
-    if (remote && !validBackup(remote))
-      throw Error(
-        "Archive Drive incompatible. Aucune donnée n’a été remplacée.",
-      );
-    remoteSnapshot.current = remote;
-    const localEmpty =
-      Object.values(data.patrols).every(
-        (p) =>
-          !p.members.length &&
-          !p.transactions.length &&
-          !p.meetings.length &&
-          !p.progress.length &&
-          !Object.keys(p.camp).length &&
-          !p.camps?.length,
-      ) && !data.branding;
-    const alreadyArchived = data.updated === archivedRevision;
-    if (
-      remote &&
-      (localEmpty || alreadyArchived || data.updated === remote.updated)
-    ) {
-      await set("nexus-data", remote);
-      setData(remote);
-      setArchivedRevision(remote.updated);
-      localStorage.setItem("nexus-archived-revision", String(remote.updated));
-      setConflict(false);
-      setCloudStatus("À jour sur Drive");
-    } else if (remote && remote.updated !== archivedRevision) {
-      setConflict(true);
-      setCloudStatus("Deux versions à vérifier");
-    } else {
-      setConflict(false);
-      setCloudStatus("Modifications en attente");
-    }
-    retries.current = 0;
-    setConnected(true);
-    notify(
-      "Google connecté. Vos prochaines modifications seront archivées automatiquement.",
-    );
-  }
-  const resumed = useRef(false);
-  useEffect(() => {
-    if (!data || resumed.current) return;
-    resumed.current = true;
-    if (drive.resumeSession()) run(() => connectDrive(true));
-  }, [data]);
-  function connectInline() {
-    if (client) run(() => connectDrive());
-    else setModal("settings");
-  }
   const inlineSaveStatus = (
     <div className="inline-save-status" role="status">
-      <Cloud size={17} />
+      <CheckCircle2 size={17} />
       <span>
-        {!online
-          ? "Enregistré sur cet appareil · envoi dès le retour du réseau"
-          : connected
-            ? data?.updated === archivedRevision
-              ? "Enregistré dans Google Drive"
-              : cloudStatus === "À jour sur Drive"
-                ? "Enregistrement Drive en attente…"
-                : cloudStatus
-            : "Enregistré sur cet appareil · Google Drive à connecter"}
+        {saveState}. Téléchargez vos documents pour les déposer sur Drive.
       </span>
-      {!connected && (
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy}
-          onClick={connectInline}
-        >
-          Connecter Drive
-        </button>
-      )}
-      {conflict && (
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => setModal("settings")}
-        >
-          Vérifier les versions
-        </button>
-      )}
     </div>
   );
-  useEffect(() => {
-    const refresh = () => {
-      setOnline(navigator.onLine);
-      retries.current = 0;
-      setRetryTick((n) => n + 1);
-    };
-    window.addEventListener("online", refresh);
-    window.addEventListener("offline", refresh);
-    return () => {
-      window.removeEventListener("online", refresh);
-      window.removeEventListener("offline", refresh);
-    };
-  }, []);
-  useEffect(() => {
-    if (
-      !data ||
-      !connected ||
-      !autoSync ||
-      conflict ||
-      data.updated === archivedRevision ||
-      retries.current > 3
-    )
-      return;
-    if (!online) {
-      setCloudStatus("Hors ligne · sauvegarde locale");
-      return;
-    }
-    if (saveState !== "Enregistré sur cet appareil" || syncing.current) return;
-    setCloudStatus(
-      retries.current
-        ? "Nouvelle tentative prévue…"
-        : "Modifications en attente…",
+  async function exportMeeting(meeting) {
+    await run(async () =>
+      download(
+        await meetingWord(patrol, meeting, data.patrols[patrol].members),
+        `Réunion ${meeting.date} - ${meeting.title}.docx`,
+      ),
     );
-    const timer = setTimeout(
-      () => archive(data),
-      retries.current ? Math.min(30000, 5000 * 2 ** retries.current) : 2500,
+  }
+  async function exportPresence(meetings = data.patrols[patrol].meetings) {
+    await run(async () =>
+      download(
+        await attendanceExcel(patrol, data.patrols[patrol].members, meetings),
+        `Présences ${patrol}.xlsx`,
+      ),
     );
-    return () => clearTimeout(timer);
-  }, [
-    data,
-    connected,
-    autoSync,
-    conflict,
-    archivedRevision,
-    retryTick,
-    online,
-    saveState,
-  ]);
-  useEffect(() => {
-    const pending = (e) => {
-      if (connected && autoSync && data?.updated !== archivedRevision) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", pending);
-    return () => window.removeEventListener("beforeunload", pending);
-  }, [data, connected, autoSync, archivedRevision]);
+  }
   function openPatrol(p) {
     selectPatrol(p);
     setSection("overview");
@@ -443,7 +269,7 @@ function App() {
               setModal("settings");
             }}
           >
-            Archives & Drive <ArrowUpRight size={14} />
+            Archives & exports <ArrowUpRight size={14} />
           </button>
         </nav>
         <div className="header-right">
@@ -471,26 +297,18 @@ function App() {
       <main data-patrol={patrol ? patrols.indexOf(patrol) : undefined}>
         <div className="drive-toolbar">
           {inlineSaveStatus}
-          {connected && <span>Les ajouts sont envoyés automatiquement</span>}
+          <button className="secondary" onClick={() => setModal("settings")}>
+            Mes exports
+          </button>
         </div>
         <div className="breadcrumb">
           <span>ESPACE TROUPE</span>
           <ChevronRight size={12} />
           <span>{patrol || "TABLEAU DE BORD"}</span>
-          <button
-            className={`local-status cloud-status ${connected ? "connected" : ""}`}
-            onClick={() => setModal("settings")}
-            aria-label={`État de sauvegarde : ${!online ? "Hors ligne · sauvegarde locale" : connected || cloudStatus === "Google à reconnecter" ? cloudStatus : saveState}`}
-          >
-            <Cloud size={13} />
-            <span>
-              {!online
-                ? "Hors ligne · sauvegarde locale"
-                : connected || cloudStatus === "Google à reconnecter"
-                  ? cloudStatus
-                  : saveState}
-            </span>
-          </button>
+          <span className="local-status">
+            <CheckCircle2 size={13} />
+            {saveState}
+          </span>
         </div>
         {!patrol ? (
           <>
@@ -754,7 +572,7 @@ function App() {
                   <Stat
                     icon={Wallet}
                     value={money(sum.income - sum.expense)}
-                    label="Solde (unité choisie)"
+                    label="Solde ($)"
                   />
                   <Stat
                     icon={CalendarDays}
@@ -772,21 +590,21 @@ function App() {
                   <div>
                     <strong>Votre archive, votre histoire.</strong>
                     <p>
-                      Connectez Google une fois : vos modifications seront
-                      archivées automatiquement après chaque changement.
+                      Téléchargez vos rapports et tableaux, puis déposez-les
+                      manuellement sur Drive.
                     </p>
                   </div>
                   <button
                     className="secondary"
                     onClick={() => setModal("settings")}
                   >
-                    Configurer Drive
+                    Mes exports
                   </button>
                 </div>
               </>
             )}
             {section === "treasury" && (
-              <>
+              <AccessGate access={access} patrol={patrol}>
                 <div className="section-heading">
                   <div>
                     <h2>Cashflow patrouille {patrol.toLowerCase()}</h2>
@@ -843,9 +661,7 @@ function App() {
                       ))}
                     </select>
                   </label>
-                  <span>
-                    Montants dans une même unité monétaire par patrouille.
-                  </span>
+                  <span>Tous les montants sont en dollars américains ($).</span>
                 </div>
                 <div className="table-wrap treasury-table">
                   <table>
@@ -899,10 +715,10 @@ function App() {
                     />
                   )}
                 </div>
-              </>
+              </AccessGate>
             )}
             {section === "secretary" && (
-              <>
+              <AccessGate access={access} patrol={patrol}>
                 <div className="subtabs">
                   {[
                     "Réunions",
@@ -999,6 +815,13 @@ function App() {
                         <Plus size={16} /> Membres
                       </button>
                     </div>
+                    <button
+                      className="secondary"
+                      onClick={() => exportPresence()}
+                    >
+                      <Download size={16} />
+                      Télécharger toutes les présences
+                    </button>
                     <MemberAttendance patrol={p} />
                     <div className="table-wrap">
                       <table>
@@ -1068,9 +891,11 @@ function App() {
                       })
                     }
                     download={(camp) =>
-                      download(
-                        excelBlob(campWorkbook(camp, patrol)),
-                        `Dossier de camp ${camp.title}.xlsx`,
+                      run(async () =>
+                        download(
+                          await campExcel(camp, patrol),
+                          `Dossier de camp ${camp.title}.xlsx`,
+                        ),
                       )
                     }
                     downloadLegacy={() =>
@@ -1083,7 +908,7 @@ function App() {
                     }
                   />
                 )}
-              </>
+              </AccessGate>
             )}
             {section === "progress" && (
               <>
@@ -1161,13 +986,20 @@ function App() {
                           onClick={() =>
                             member
                               ? setModal({ type: "progress", badge: i })
-                              : notify(
-                                  "Choisissez votre nom avant d’ouvrir un carnet.",
-                                )
+                              : setModal({ type: "badge-photo", badge: i })
                           }
                         >
                           <span className="badge-emblem">
-                            {i < 4 ? <Shield size={28} /> : <Award size={28} />}
+                            {data.badgeImages?.[i] ? (
+                              <img
+                                src={data.badgeImages[i]}
+                                alt={`Photo ${b}`}
+                              />
+                            ) : i < 4 ? (
+                              <Shield size={28} />
+                            ) : (
+                              <Award size={28} />
+                            )}
                           </span>
                           <small>
                             {i < 4
@@ -1196,8 +1028,8 @@ function App() {
           </span>
           <span>Fait pour la troupe. Pensé pour l’aventure.</span>
           <button onClick={() => setModal("settings")}>
-            <i className={connected ? "green-dot" : "grey-dot"} />
-            {connected ? "Drive connecté" : "Mode local · Drive non connecté"}
+            <Download size={12} />
+            Archives & exports
           </button>
         </footer>
       </main>
@@ -1269,13 +1101,28 @@ function App() {
                   {p.members.map((m) => (
                     <div key={m.id}>
                       <span className="avatar">
-                        {m.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .slice(0, 2)
-                          .join("")}
+                        {m.photo ? (
+                          <img src={m.photo} alt={m.name} />
+                        ) : (
+                          m.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .slice(0, 2)
+                            .join("")
+                        )}
                       </span>
-                      <span>{m.name}</span>
+                      <span className="member-name">
+                        {m.photo && <img src={m.photo} alt={m.name} />} {m.name}
+                      </span>
+                      <ImageUpload
+                        label={`Photo de ${m.name}`}
+                        value={m.photo}
+                        onChange={(photo) =>
+                          patch((p) => {
+                            p.members.find((x) => x.id === m.id).photo = photo;
+                          })
+                        }
+                      />
                     </div>
                   ))}
                 </div>
@@ -1368,6 +1215,8 @@ function App() {
               <MeetingForm
                 meeting={modal.meeting}
                 members={p.members}
+                exportReport={exportMeeting}
+                exportAttendance={(m) => exportPresence([m])}
                 save={(m) => {
                   patch((p) => {
                     const i = p.meetings.findIndex((x) => x.id === m.id);
@@ -1378,6 +1227,38 @@ function App() {
                   notify("Rapport et présences enregistrés sur cet appareil.");
                 }}
               />
+            )}
+            {(modal.type === "progress" || modal.type === "badge-photo") && (
+              <div className="badge-photo-editor">
+                <h3>
+                  Photo de{" "}
+                  {
+                    [
+                      "Promesse",
+                      "2nde classe",
+                      "Première classe",
+                      "Raider",
+                      ...data.badges,
+                    ][modal.badge]
+                  }
+                </h3>
+                <ImageUpload
+                  label="Photo du badge"
+                  value={data.badgeImages?.[modal.badge]}
+                  onChange={(photo) =>
+                    update((d) => {
+                      d.badgeImages ??= {};
+                      d.badgeImages[modal.badge] = photo;
+                    })
+                  }
+                />
+                {modal.type === "badge-photo" && (
+                  <p className="hint">
+                    Choisissez votre nom dans la progression pour ajouter vos
+                    réalisations.
+                  </p>
+                )}
+              </div>
             )}
             {modal.type === "progress" && <>{inlineSaveStatus}</>}
             {modal.type === "progress" && (
@@ -1446,163 +1327,13 @@ function App() {
             {modal === "settings" && (
               <>
                 <div className="eyebrow">VOTRE HISTOIRE, BIEN GARDÉE</div>
-                <h2>Archives & Google Drive</h2>
-                <div className="connection">
-                  <Cloud />
-                  <div>
-                    <strong>
-                      {connected
-                        ? "Google Drive connecté"
-                        : "Travail local sur cet appareil"}
-                    </strong>
-                    <p>
-                      {lastSync
-                        ? `Dernière archive : ${new Date(lastSync).toLocaleString("fr-FR")}`
-                        : "Aucune synchronisation effectuée."}
-                    </p>
-                  </div>
-                </div>
+                <h2>Archives & exports</h2>
                 <p>
-                  Connectez votre compte pour créer un dossier Nexus Troupe
-                  Orion, six dossiers de patrouille, leurs Google Sheets,
-                  rapports Google Docs et photos de progression.
+                  Les données sont enregistrées sur cet appareil. Téléchargez
+                  les rapports Word et tableaux Excel depuis les sections, puis
+                  déposez-les vous-même dans Google Drive. Exportez aussi une
+                  sauvegarde complète pour conserver les photos.
                 </p>
-                <label>
-                  Identifiant client Google OAuth
-                  <input
-                    value={client}
-                    placeholder="…apps.googleusercontent.com"
-                    onChange={(e) => {
-                      setClient(e.target.value);
-                      localStorage.setItem(
-                        "nexus-google-client",
-                        e.target.value,
-                      );
-                    }}
-                  />
-                </label>
-                <p className="hint">
-                  Client Web Google Cloud avec API Drive activée. Ajoutez
-                  l’origine exacte de ce site aux origines JavaScript
-                  autorisées. Aucun secret client requis.
-                </p>
-                <div className="actions">
-                  <button
-                    className="primary"
-                    disabled={busy || cloudStatus === "Archivage en cours…"}
-                    onClick={() =>
-                      run(async () => {
-                        await connectDrive();
-                      })
-                    }
-                  >
-                    <Cloud size={16} />
-                    {busy
-                      ? "Veuillez patienter…"
-                      : connected
-                        ? "Reconnecter"
-                        : "Connecter Google"}
-                  </button>
-                  {connected && (
-                    <button
-                      className="secondary"
-                      disabled={busy || cloudStatus === "Archivage en cours…"}
-                      onClick={() => {
-                        drive.disconnect();
-                        setConnected(false);
-                      }}
-                    >
-                      Déconnecter
-                    </button>
-                  )}
-                </div>
-                <div className="settings-block">
-                  <h3>L’archive se met à jour toute seule</h3>
-                  <div className="toggle-row">
-                    <span>
-                      <strong>Archivage automatique toujours actif</strong>
-                      <small>
-                        Les ajouts sont envoyés dès leur enregistrement. Aucune
-                        sauvegarde manuelle depuis les paramètres.
-                      </small>
-                    </span>
-                    <Check size={24} />
-                  </div>
-                  <p className="sync-detail" role="status">
-                    {!online
-                      ? "Hors ligne : vos modifications sont gardées sur cet appareil."
-                      : connected
-                        ? cloudStatus
-                        : "Connectez Google pour activer l’archivage automatique."}
-                  </p>
-                  {conflict && (
-                    <p className="conflict-note">
-                      La version Drive et celle de cet appareil ont changé.
-                      Exportez votre copie locale, puis restaurez Drive ou
-                      choisissez « Envoyer ma version ».
-                    </p>
-                  )}
-                  <p>
-                    Chaque modification est envoyée après quelques secondes,
-                    pendant que l’application reste ouverte et Google connecté.
-                    En cas de coupure réseau, les données restent sur cet
-                    appareil et l’envoi reprend au retour de la connexion.
-                    Google peut demander une reconnexion lorsque l’autorisation
-                    expire.
-                  </p>
-                  <div className="actions">
-                    <button
-                      className="primary"
-                      disabled={
-                        !connected ||
-                        busy ||
-                        cloudStatus === "Archivage en cours…"
-                      }
-                      onClick={sync}
-                    >
-                      <Upload size={16} />
-                      {busy
-                        ? "Archivage en cours…"
-                        : conflict
-                          ? "Envoyer ma version"
-                          : "Réessayer maintenant"}
-                    </button>
-                    <button
-                      className="secondary"
-                      disabled={
-                        !connected ||
-                        busy ||
-                        cloudStatus === "Archivage en cours…"
-                      }
-                      onClick={() => {
-                        if (
-                          confirm(
-                            "Remplacer les données locales par la dernière archive Drive ? Exportez une copie locale avant de continuer.",
-                          )
-                        )
-                          run(async () => {
-                            const d = await drive.restore();
-                            if (!validBackup(d))
-                              throw Error("Archive incompatible.");
-                            await set("nexus-data", d);
-                            setData(d);
-                            remoteSnapshot.current = d;
-                            setArchivedRevision(d.updated);
-                            localStorage.setItem(
-                              "nexus-archived-revision",
-                              String(d.updated),
-                            );
-                            retries.current = 0;
-                            setConflict(false);
-                            setCloudStatus("À jour sur Drive");
-                            notify("Archive restaurée.");
-                          });
-                      }}
-                    >
-                      <Download size={16} /> Restaurer
-                    </button>
-                  </div>
-                </div>
                 <div className="settings-block">
                   <h3>Les logos de la troupe</h3>
                   <p>
@@ -1685,6 +1416,35 @@ function App() {
                       />
                     </label>
                   </div>
+                  {access.configured && patrol && (
+                    <button
+                      className="secondary"
+                      onClick={() =>
+                        run(async () => {
+                          const history = await get(
+                            `nexus-private-backup-${patrol}`,
+                          );
+                          if (!history?.length)
+                            throw Error(
+                              "Aucune ancienne copie locale pour cette patrouille.",
+                            );
+                          const copy = structuredClone(data);
+                          Object.assign(
+                            copy.patrols[patrol],
+                            history[0].payload,
+                          );
+                          download(
+                            new Blob([JSON.stringify(copy, null, 2)], {
+                              type: "application/json",
+                            }),
+                            `nexus-avant-connexion-${patrol}.json`,
+                          );
+                        })
+                      }
+                    >
+                      Télécharger la copie locale avant connexion
+                    </button>
+                  )}
                   <div className="template-links">
                     <a href="/templates/cashflow.xlsx" download>
                       Modèle cashflow original ↗
@@ -1744,7 +1504,13 @@ function Empty({ icon: Icon, title, text }) {
     </div>
   );
 }
-function MeetingForm({ meeting, members, save }) {
+function MeetingForm({
+  meeting,
+  members,
+  save,
+  exportReport,
+  exportAttendance,
+}) {
   const [statuses, change] = useState({
     ...Object.fromEntries(members.map((m) => [m.id, "absent"])),
     ...meeting?.attendance,
@@ -1753,6 +1519,30 @@ function MeetingForm({ meeting, members, save }) {
     <>
       <div className="eyebrow">SECRÉTARIAT · RAPPORT & PRÉSENCES</div>
       <h2>{meeting ? "Le carnet de réunion" : "Une nouvelle réunion"}</h2>
+      {meeting && (
+        <div className="actions meeting-exports">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => exportReport(meeting)}
+          >
+            <Download size={16} />
+            Rapport Word
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => exportAttendance(meeting)}
+          >
+            <Download size={16} />
+            Présences Excel
+          </button>
+          <p className="hint">
+            Exports de la dernière version enregistrée, à déposer manuellement
+            sur Drive.
+          </p>
+        </div>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -1797,7 +1587,9 @@ function MeetingForm({ meeting, members, save }) {
         <div className="attendance-list">
           {members.map((m) => (
             <div key={m.id}>
-              <span>{m.name}</span>
+              <span className="member-name">
+                {m.photo && <img src={m.photo} alt={m.name} />} {m.name}
+              </span>
               <div>
                 {["present", "absent"].map((status) => (
                   <button

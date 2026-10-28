@@ -110,7 +110,9 @@ export function MemberAttendance({ patrol }) {
           return (
             <article key={m.id}>
               <div className="member-chart-title">
-                <strong>{m.name}</strong>
+                <strong className="member-name">
+                  {m.photo && <img src={m.photo} alt={m.name} />} {m.name}
+                </strong>
                 <span>{rate === null ? "—" : `${rate} %`}</span>
               </div>
               <div className="chart-track">

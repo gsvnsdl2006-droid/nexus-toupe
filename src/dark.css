@@ -2093,3 +2093,190 @@ input[type="file"] {
     font-size: 24px;
   }
 }
+.image-upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.image-upload .uploaded-image {
+  width: 78px;
+  height: 78px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid #587449;
+}
+.image-upload .file-button {
+  font-size: 11px;
+  min-height: 42px;
+}
+.image-upload input[type="file"] {
+  margin: 0;
+}
+.member-list > div {
+  flex-wrap: wrap;
+}
+.member-list .image-upload {
+  margin-left: auto;
+}
+.avatar {
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.badge-emblem:has(img) {
+  clip-path: none;
+  background: transparent;
+  width: 76px;
+  height: 76px;
+}
+.badge-emblem img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+}
+.badge-photo-editor {
+  border-bottom: 1px solid #3c563d;
+  padding: 8px 0 24px;
+  margin-bottom: 24px;
+}
+.badge-photo-editor h3 {
+  line-height: 1.5;
+}
+.badge-photo-editor .uploaded-image {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+}
+.meeting-exports {
+  border: 1px solid #3c573d;
+  border-radius: 10px;
+  padding: 15px;
+  margin: 20px 0;
+}
+.meeting-exports .hint {
+  margin: 0;
+  width: 100%;
+}
+.access-gate {
+  max-width: 560px;
+  border: 1px solid #58734b;
+  background: #193422;
+  border-radius: 16px;
+  padding: 32px;
+  margin: 30px auto;
+}
+.access-gate > svg {
+  color: var(--accent);
+}
+.access-gate h2 {
+  font-size: 24px;
+  line-height: 1.5;
+  margin: 20px 0 15px;
+}
+.access-gate p,
+.access-gate small {
+  color: #b1c49f;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.access-gate small {
+  display: block;
+  margin-top: 22px;
+  font-size: 11px;
+}
+.access-setup-note,
+.access-session {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #302f20;
+  border: 1px solid #6d6240;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 24px 0;
+  font-size: 11px;
+  color: #e2d3aa;
+}
+.access-setup-note > svg,
+.access-session > svg {
+  flex-shrink: 0;
+}
+.access-setup-note p {
+  margin: 0;
+  line-height: 1.7;
+}
+.access-session {
+  background: #1a3523;
+  border-color: #53704a;
+  color: #c5dab0;
+  flex-wrap: wrap;
+}
+.access-session span {
+  flex: 1;
+  min-width: 160px;
+}
+.drive-toolbar .inline-save-status {
+  font-size: 11px;
+  line-height: 1.7;
+}
+@media (max-width: 760px) {
+  .member-list .image-upload {
+    margin-left: 0;
+    width: 100%;
+    padding-top: 10px;
+  }
+  .image-upload .uploaded-image {
+    width: 64px;
+    height: 64px;
+  }
+  .member-list > div {
+    gap: 12px;
+  }
+  .member-list .avatar {
+    width: 42px;
+    height: 42px;
+  }
+  .image-upload .file-button {
+    font-size: 11px;
+  }
+  .access-gate {
+    padding: 24px 20px;
+  }
+  .access-gate h2 {
+    font-size: 22px;
+  }
+  .access-setup-note {
+    padding: 14px;
+    font-size: 10px;
+  }
+  .meeting-exports .secondary {
+    width: 100%;
+  }
+  .drive-toolbar {
+    display: block;
+  }
+  .drive-toolbar > .secondary {
+    margin-top: 10px;
+    min-height: 38px;
+    font-size: 11px;
+  }
+}
+.member-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.member-name img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
