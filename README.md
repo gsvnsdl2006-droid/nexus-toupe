@@ -38,3 +38,11 @@ Les deux maîtrises confirmées sont prévues dans le SQL : `gsvnsdl2006@gmail.c
 Les tests couvrent l'isolation des patrouilles, les taux de présence, la lecture effective des classeurs exportés (données, formules, styles), les rapports Word, les photos, la persistance et l'affichage mobile. L'accès réel par e-mail doit être validé sur un projet Supabase configuré, avec les politiques RLS appliquées et l'envoi de codes opérationnel ; aucun test local ne prouve à lui seul cette activation.
 
 Les tests Playwright lancent Vite en mode `test`, qui utilise un projet local vide ou un serveur Supabase simulé ; ils ne contactent pas le projet de production. La compilation normale utilise les identifiants publics fournis par le propriétaire.
+
+## Codes scouts
+
+La section Codes reprend le même moteur que `gsvnsdl2006-droid/nexus-ai-gsvn`, référence `97084fad448dadc77aa5baaa18127f7840cf1b64` (`assets/codes.mjs`). Elle est accessible depuis l’accueil et depuis chaque patrouille sans connexion utilisateur : Morse international, alphabet numéroté avec clé personnalisable (ex. C=9), substitution de lettres (ex. A=K), alphabet inversé Atbash, codage/décodage instantané, tableau complet de correspondances, copie et téléchargement texte. Les accents sont normalisés et les caractères non pris en charge sont conservés et signalés. Le brouillon reste dans l’onglet via sessionStorage. Aucun service d’IA ni nouvelle autorisation n’est requis.
+
+## Suppression des membres et réunions
+
+Seuls `gsvnsdl2006@gmail.com` et `troupeoriongsvn@gmail.com` peuvent supprimer un membre ou une réunion. Activer une fois la règle côté base en exécutant [supabase/leader-deletion.sql](supabase/leader-deletion.sql) dans le SQL Editor du projet existant. Les boutons restent désactivés tant que cette migration n’est pas installée. Les anciennes présences et le nom d’un membre supprimé sont conservés dans les réunions historiques et leurs exports. Une réunion supprimée ne compte plus dans les statistiques. Les tests PostgreSQL vérifient également le refus d’une suppression par un compte de patrouille via une mise à jour directe du JSON.

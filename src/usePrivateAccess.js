@@ -1,3 +1,4 @@
+import { isLeader } from "./leader-policy.js";
 import { returnContextKey, loginReturnError } from "./auth-context.js";
 import { useEffect, useRef, useState } from "react";
 import { accessClient, privatePayload } from "./access";
@@ -6,7 +7,8 @@ export default function usePrivateAccess(patrol, onRemote, section) {
     [allowed, setAllowed] = useState([]),
     [loading, setLoading] = useState(Boolean(accessClient)),
     [status, setStatus] = useState(""),
-    [authError, setAuthError] = useState(loginReturnError);
+    [authError, setAuthError] = useState(loginReturnError),
+    [deletionReady, setDeletionReady] = useState(false);
   const revisions = useRef(new Map()),
     pending = useRef(new Map()),
     writing = useRef(false),
@@ -38,6 +40,7 @@ export default function usePrivateAccess(patrol, onRemote, section) {
   }, []);
   useEffect(() => {
     let active = true;
+    setDeletionReady(false);
     if (!accessClient || !user) {
       setAllowed([]);
       revisions.current.clear();
@@ -51,6 +54,10 @@ export default function usePrivateAccess(patrol, onRemote, section) {
       if (!active) return;
       const names = a.data.map((x) => x.patrol);
       setAllowed(names);
+      if (isLeader(user)) {
+        const check = await accessClient.rpc("leader_deletion_enabled");
+        if (active) setDeletionReady(!check.error && check.data === true);
+      }
       if (patrol && names.includes(patrol)) {
         const r = await accessClient
           .from("patrol_records")
@@ -131,6 +138,15 @@ export default function usePrivateAccess(patrol, onRemote, section) {
     status,
     authorized: Boolean(user) && allowed.includes(patrol),
     save,
+    isLeader: isLeader(user),
+    canDelete:
+      isLeader(user) &&
+      Boolean(user) &&
+      allowed.includes(patrol) &&
+      deletionReady &&
+      !loading,
+    deletionReady,
+    saving: writing.current,
     authError,
     signInGoogle: async () => {
       setAuthError("");

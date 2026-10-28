@@ -1,6 +1,26 @@
 import { test, expect } from "@playwright/test";
-async function mock(page, allowed) {
-  const email = "test@example.com";
+async function mock(page, allowed, options = {}) {
+  const email = options.email || "test@example.com";
+  const state = { updates: [] };
+  let record = {
+    revision: 1,
+    payload: options.payload || {
+      members: [],
+      meetings: [],
+      camp: {},
+      camps: [],
+      transactions: [
+        {
+          id: "private-record",
+          activity: "concours cuisine",
+          type: "in",
+          amount: 25,
+          date: "2026-10-28",
+          description: "Cotisation privée",
+        },
+      ],
+    },
+  };
   const user = () => ({
     id: "11111111-1111-4111-8111-111111111111",
     aud: "authenticated",
@@ -63,31 +83,25 @@ async function mock(page, allowed) {
       if (url.includes("/auth/v1/user")) return json(user());
       if (url.includes("/rest/v1/patrol_access"))
         return json(allowed.map((patrol) => ({ patrol })));
-      if (url.includes("/rest/v1/patrol_records"))
-        return json([
-          {
-            revision: 1,
-            payload: {
-              members: [],
-              meetings: [],
-              camp: {},
-              camps: [],
-              transactions: [
-                {
-                  id: "private-record",
-                  activity: "concours cuisine",
-                  type: "in",
-                  amount: 25,
-                  date: "2026-10-28",
-                  description: "Cotisation privée",
-                },
-              ],
-            },
-          },
-        ]);
+      if (url.includes("/rest/v1/rpc/leader_deletion_enabled"))
+        return json(options.deletionReady !== false);
+      if (url.includes("/rest/v1/patrol_records")) {
+        if (r.method() === "PATCH" || r.method() === "POST") {
+          const update = r.postDataJSON();
+          record = { payload: update.payload, revision: update.revision };
+          state.updates.push(record);
+          return json(
+            r.method() === "POST"
+              ? { revision: record.revision }
+              : [{ revision: record.revision }],
+          );
+        }
+        return json([record]);
+      }
       return json({});
     },
   );
+  return state;
 }
 for (const allowed of [[], ["Lions"]])
   test(`verified e-mail ${allowed.length ? "is restricted to its own patrol" : "with no grant cannot open protected sections"}`, async ({
@@ -173,4 +187,97 @@ test("a cancelled Google sign-in returns to the selected patrol with a retry but
     page.getByRole("button", { name: "Continue with Google", exact: true }),
   ).toBeEnabled();
   await expect(page.getByRole("alert")).toContainText("cancelled");
+});
+
+const fixture = {
+  members: [{ id: "member-a", name: "Scout à supprimer" }],
+  meetings: [
+    {
+      id: "event-a",
+      title: "Réunion à supprimer",
+      date: "2026-10-29",
+      summary: "Rapport",
+      attendance: { "member-a": "present" },
+    },
+  ],
+  transactions: [],
+  camp: {},
+  camps: [],
+};
+for (const email of [
+  "gsvnsdl2006@gmail.com",
+  "troupeoriongsvn@gmail.com",
+  "goelandaularge@gmail.com",
+])
+  test(`deletion controls and persistence for ${email}`, async ({ page }) => {
+    const state = await mock(page, ["Goélands"], { email, payload: fixture });
+    await page.goto("/");
+    await page.getByRole("button", { name: /PATROUILLE 01/ }).click();
+    await page
+      .getByRole("button", { name: "Secrétariat", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Continue with Google", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Nouvelle réunion", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: /Gérer les membres/ }).click();
+    const deletion = page.getByRole("button", {
+      name: "Supprimer Scout à supprimer",
+      exact: true,
+    });
+    if (email === "goelandaularge@gmail.com") {
+      await expect(deletion).toHaveCount(0);
+      await page.locator(".modal-close").click();
+      await page.locator(".meeting-card").click();
+      await expect(
+        page.getByRole("button", { name: "Supprimer la réunion", exact: true }),
+      ).toHaveCount(0);
+      expect(state.updates).toHaveLength(0);
+      return;
+    }
+    page.on("dialog", (d) => d.accept());
+    await expect(deletion).toBeEnabled();
+    await deletion.click();
+    await expect(page.locator(".member-list")).not.toContainText(
+      "Scout à supprimer",
+    );
+    await expect.poll(() => state.updates.length).toBe(1);
+    expect(state.updates[0].payload.meetings[0].memberNames["member-a"]).toBe(
+      "Scout à supprimer",
+    );
+    await page.locator(".modal-close").click();
+    await page.locator(".meeting-card").click();
+    await page
+      .getByRole("button", { name: "Supprimer la réunion", exact: true })
+      .click();
+    await expect.poll(() => state.updates.length).toBe(2);
+    expect(state.updates[1].payload.meetings).toEqual([]);
+    await expect(page.locator(".meeting-card")).toHaveCount(0);
+  });
+test("leader deletion stays disabled until the database migration is installed", async ({
+  page,
+}) => {
+  await mock(page, ["Goélands"], {
+    email: "gsvnsdl2006@gmail.com",
+    payload: fixture,
+    deletionReady: false,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /PATROUILLE 01/ }).click();
+  await page.getByRole("button", { name: "Secrétariat", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Continue with Google", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Nouvelle réunion", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Gérer les membres/ }).click();
+  await expect(
+    page.getByRole("button", {
+      name: "Supprimer Scout à supprimer",
+      exact: true,
+    }),
+  ).toBeDisabled();
 });

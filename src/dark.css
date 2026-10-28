@@ -2280,3 +2280,372 @@ input[type="file"] {
   object-fit: cover;
   flex-shrink: 0;
 }
+.codes-entry {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  width: 100%;
+  background: #1d3a27;
+  border: 1px solid #658053;
+  color: #cce3b1;
+  border-radius: 14px;
+  padding: 20px 24px;
+  text-align: left;
+  margin: 0 0 25px;
+}
+.codes-entry > span {
+  flex: 1;
+}
+.codes-entry strong {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+.codes-entry small {
+  display: block;
+  color: #adc49e;
+  font-size: 12px;
+}
+.codes-entry:hover {
+  background: #2b4b30;
+  border-color: #b7d395;
+}
+.codes-workshop {
+  margin: 20px 0 45px;
+}
+.codes-local {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: #b3cf97;
+}
+.cipher-modes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 24px 0;
+}
+.cipher-modes button {
+  display: flex;
+  align-items: start;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid #3b583d;
+  border-radius: 12px;
+  background: #173221;
+  color: #c5d5b6;
+  padding: 21px;
+  text-align: left;
+  min-height: 145px;
+}
+.cipher-modes button.active {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.cipher-modes strong {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.cipher-modes small {
+  font-size: 11px;
+  color: #adbf9d;
+}
+.cipher-config {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 25px 0;
+}
+.cipher-direction {
+  display: flex;
+  gap: 5px;
+  border: 1px solid #3d573c;
+  padding: 5px;
+  border-radius: 10px;
+  background: #102a1b;
+}
+.cipher-direction button {
+  border: 0;
+  background: none;
+  min-width: 110px;
+  min-height: 45px;
+  border-radius: 7px;
+  padding: 10px 16px;
+  color: #aebf9f;
+  font-size: 13px;
+}
+.cipher-direction button.active {
+  background: #345332;
+  color: #e2eed2;
+}
+.cipher-key {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.cipher-key label {
+  min-width: 145px;
+  margin: 0;
+}
+.cipher-key > span {
+  padding-top: 22px;
+  color: var(--accent);
+  font-size: 24px;
+}
+.cipher-editors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.cipher-editors > div {
+  min-width: 0;
+}
+.cipher-editors label {
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+.cipher-editors textarea {
+  font-size: 16px;
+  min-height: 220px;
+  line-height: 1.9;
+  resize: vertical;
+}
+.cipher-editors > div > small {
+  font-size: 10px;
+  color: #a6bc93;
+}
+.cipher-result textarea {
+  background: #1b3624;
+  color: #e2eed1;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.cipher-warning {
+  padding: 14px 18px;
+  color: #ead19e;
+  border: 1px solid #8c7547;
+  border-radius: 9px;
+  background: #342f1d;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.cipher-feedback {
+  font-size: 12px;
+  color: #bfdba1;
+  min-height: 18px;
+  margin: 18px 0 4px;
+}
+.cipher-reference {
+  border: 1px solid #3b573d;
+  border-radius: 12px;
+  background: #142e1e;
+  margin-top: 24px;
+  overflow: hidden;
+}
+.cipher-reference summary {
+  cursor: pointer;
+  padding: 20px;
+  color: #d4e5be;
+  font-size: 14px;
+  min-height: 55px;
+}
+.cipher-reference summary > span {
+  font-size: 10px;
+  color: #a7bc96;
+  margin-left: 15px;
+}
+.cipher-mapping {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 9px;
+  padding: 0 20px 20px;
+}
+.cipher-mapping > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  background: #213d28;
+  border: 1px solid #385039;
+  border-radius: 6px;
+  padding: 11px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cipher-mapping code {
+  font-size: 14px;
+  color: var(--accent);
+}
+.cipher-mapping > div > span {
+  font-size: 10px;
+  color: #849c74;
+}
+.morse-mapping {
+  grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+}
+.morse-mapping code {
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+@media (max-width: 760px) {
+  .mobile-dock {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .mobile-dock button {
+    font-size: 9px;
+    min-width: 0;
+  }
+  .mobile-dock button > svg {
+    width: 20px;
+    height: 20px;
+  }
+  .codes-entry {
+    padding: 17px 18px;
+    margin-bottom: 24px;
+    gap: 14px;
+  }
+  .codes-entry strong {
+    font-size: 14px;
+  }
+  .codes-entry small {
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .codes-workshop {
+    margin-top: 20px;
+  }
+  .codes-workshop .section-heading h2 {
+    font-size: 24px;
+  }
+  .cipher-modes {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 20px 0;
+  }
+  .cipher-modes button {
+    padding: 16px;
+    min-height: 140px;
+    gap: 10px;
+  }
+  .cipher-modes strong {
+    font-size: 13px;
+  }
+  .cipher-modes small {
+    font-size: 11px;
+  }
+  .cipher-config {
+    gap: 16px;
+    display: block;
+    margin: 20px 0;
+  }
+  .cipher-direction {
+    width: 100%;
+    margin: 0 0 20px;
+  }
+  .cipher-direction button {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    min-height: 46px;
+  }
+  .cipher-key {
+    gap: 12px;
+    width: 100%;
+  }
+  .cipher-key label {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+  }
+  .cipher-key > span {
+    padding-top: 22px;
+  }
+  .cipher-editors {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .cipher-editors textarea {
+    font-size: 16px;
+    min-height: 170px;
+  }
+  .cipher-editors label {
+    font-size: 13px;
+  }
+  .cipher-result .actions {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .cipher-result .actions > button {
+    flex: 1;
+    min-width: 110px;
+    font-size: 11px;
+  }
+  .cipher-reference summary {
+    padding: 18px 15px;
+    font-size: 13px;
+  }
+  .cipher-reference summary > span {
+    margin-left: 7px;
+    font-size: 9px;
+  }
+  .cipher-mapping {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 0 12px 15px;
+    gap: 7px;
+  }
+  .cipher-mapping > div {
+    padding: 10px 8px;
+    gap: 4px;
+    font-size: 11px;
+  }
+  .cipher-mapping code {
+    font-size: 13px;
+  }
+  .morse-mapping {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .morse-mapping code {
+    font-size: 14px;
+  }
+  .codes-local {
+    font-size: 10px;
+  }
+  .codes-workshop .hint {
+    font-size: 11px !important;
+  }
+}
+@media (max-width: 760px) {
+  .codes-entry + .stats {
+    display: none;
+  }
+}
+.delete-action {
+  border: 1px solid #a5685b;
+  border-radius: 7px;
+  background: #442a25;
+  color: #f4c1af;
+  padding: 10px 14px;
+  font-size: 12px;
+  min-height: 44px;
+}
+.delete-action:hover {
+  background: #5d342b;
+}
+.delete-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.deletion-setup {
+  font-size: 11px;
+  line-height: 1.7;
+  color: #dfc38b;
+  padding: 12px;
+  border: 1px solid #756440;
+  border-radius: 8px;
+  background: #302c1b;
+}

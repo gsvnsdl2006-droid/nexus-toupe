@@ -22,6 +22,7 @@
     "xlsx": "npm:@e965/xlsx@0.20.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.13",
     "@playwright/test": "^1.56.0",
     "vite": "^7.2.0"
   }

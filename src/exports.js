@@ -232,7 +232,9 @@ export async function meetingWord(patrol, meeting, members) {
   const cell = (text) =>
     new TableCell({ children: [new Paragraph(String(text))] });
   const attendance = Object.entries(meeting.attendance).map(([id, s]) => [
-    members.find((m) => m.id === id)?.name || "Ancien membre",
+    members.find((m) => m.id === id)?.name ||
+      meeting.memberNames?.[id] ||
+      "Ancien membre",
     s === "present" ? "Présent" : "Absent",
   ]);
   const document = new Document({

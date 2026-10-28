@@ -13,9 +13,13 @@ export function readLoginReturn() {
     sessionStorage.removeItem(returnContextKey);
     return {
       patrol: patrols.includes(saved.patrol) ? saved.patrol : null,
-      section: ["overview", "treasury", "secretary", "progress"].includes(
-        saved.section,
-      )
+      section: [
+        "overview",
+        "treasury",
+        "secretary",
+        "progress",
+        "codes",
+      ].includes(saved.section)
         ? saved.section
         : "overview",
     };

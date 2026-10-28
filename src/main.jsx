@@ -1,3 +1,5 @@
+import { removeMember, attendanceMembers } from "./leader-policy";
+import Codes from "./Codes";
 import { readLoginReturn } from "./auth-context";
 import AccessGate from "./AccessGate";
 import usePrivateAccess from "./usePrivateAccess";
@@ -46,6 +48,7 @@ import {
   TrendingUp,
   CheckCircle2,
   Menu,
+  Code2,
 } from "lucide-react";
 import {
   patrols,
@@ -216,10 +219,39 @@ function App() {
   async function exportPresence(meetings = data.patrols[patrol].meetings) {
     await run(async () =>
       download(
-        await attendanceExcel(patrol, data.patrols[patrol].members, meetings),
+        await attendanceExcel(
+          patrol,
+          attendanceMembers(data.patrols[patrol].members, meetings),
+          meetings,
+        ),
         `Présences ${patrol}.xlsx`,
       ),
     );
+  }
+  function deleteMember(member) {
+    if (!access.canDelete || access.saving) return;
+    if (
+      !confirm(
+        `Supprimer ${member.name} de la patrouille ? Les anciennes présences seront conservées.`,
+      )
+    )
+      return;
+    patch((p) => removeMember(p, member.id));
+  }
+  function deleteEvent(meeting) {
+    if (!access.canDelete || access.saving) return;
+    if (
+      !confirm(`Supprimer la réunion « ${meeting.title} » et ses présences ?`)
+    )
+      return;
+    patch((p) => {
+      p.meetings = p.meetings.filter((m) => m.id !== meeting.id);
+    });
+    setModal(null);
+  }
+  function goHome() {
+    selectPatrol(null);
+    setSection("overview");
   }
   function openPatrol(p) {
     selectPatrol(p);
@@ -243,15 +275,12 @@ function App() {
     treasury: "Une trésorerie bien tenue.",
     secretary: "Les souvenirs se construisent ici.",
     progress: "Chaque pas compte.",
+    codes: "Un message. Une clé. À toi de jouer.",
   };
   return (
     <>
       <header>
-        <button
-          className="brand"
-          onClick={() => selectPatrol(null)}
-          aria-label="Accueil Nexus"
-        >
+        <button className="brand" onClick={goHome} aria-label="Accueil Nexus">
           <span className="logo-window nexus-logo">
             <img
               src={data.branding?.nexus || "/branding/logos.webp"}
@@ -265,8 +294,8 @@ function App() {
         </button>
         <nav>
           <button
-            className={!patrol ? "selected" : ""}
-            onClick={() => selectPatrol(null)}
+            className={!patrol && section !== "codes" ? "selected" : ""}
+            onClick={goHome}
           >
             Les patrouilles
           </button>
@@ -276,6 +305,15 @@ function App() {
             }}
           >
             Archives & exports <ArrowUpRight size={14} />
+          </button>
+          <button
+            className={section === "codes" ? "selected" : ""}
+            onClick={() => {
+              selectPatrol(null);
+              setSection("codes");
+            }}
+          >
+            Codes
           </button>
         </nav>
         <div className="header-right">
@@ -310,13 +348,23 @@ function App() {
         <div className="breadcrumb">
           <span>ESPACE TROUPE</span>
           <ChevronRight size={12} />
-          <span>{patrol || "TABLEAU DE BORD"}</span>
+          <span>
+            {patrol || (section === "codes" ? "CODES" : "TABLEAU DE BORD")}
+          </span>
           <span className="local-status">
             <CheckCircle2 size={13} />
             {saveState}
           </span>
         </div>
-        {!patrol ? (
+        {!patrol && section === "codes" ? (
+          <>
+            <button className="back" onClick={goHome}>
+              <ArrowLeft size={16} />
+              Toutes les patrouilles
+            </button>
+            <Codes />
+          </>
+        ) : !patrol ? (
           <>
             <section className="hero">
               <div>
@@ -420,6 +468,14 @@ function App() {
                 </div>
               </div>
             </section>
+            <button className="codes-entry" onClick={() => setSection("codes")}>
+              <Code2 size={26} />
+              <span>
+                <strong>Atelier des codes</strong>
+                <small>Morse, alphabets et messages secrets</small>
+              </span>
+              <ArrowUpRight size={21} />
+            </button>
             <section className="stats">
               <Stat icon={Shield} value="06" label="Patrouilles, une famille" />
               <Stat
@@ -496,7 +552,7 @@ function App() {
           </>
         ) : (
           <>
-            <button className="back" onClick={() => selectPatrol(null)}>
+            <button className="back" onClick={goHome}>
               <ArrowLeft size={15} /> Toutes les patrouilles
             </button>
             <div className="patrol-title">
@@ -525,6 +581,7 @@ function App() {
                 ["treasury", "Trésorier", Wallet],
                 ["secretary", "Secrétariat", FileText],
                 ["progress", "Progression", Award],
+                ["codes", "Codes", Code2],
               ].map(([key, label, Icon]) => (
                 <button
                   key={key}
@@ -536,6 +593,7 @@ function App() {
                 </button>
               ))}
             </div>
+            {section === "codes" && <Codes />}
             {section === "overview" && (
               <>
                 <div className="workspace-grid">
@@ -1103,6 +1161,12 @@ function App() {
                     <Plus size={16} /> Ajouter un membre
                   </button>
                 </form>
+                {access.isLeader && !access.deletionReady && (
+                  <p className="deletion-setup">
+                    La suppression sécurisée attend l’activation de la mise à
+                    jour Supabase.
+                  </p>
+                )}
                 <div className="member-list">
                   {p.members.map((m) => (
                     <div key={m.id}>
@@ -1120,6 +1184,17 @@ function App() {
                       <span className="member-name">
                         {m.photo && <img src={m.photo} alt={m.name} />} {m.name}
                       </span>
+                      {access.isLeader && (
+                        <button
+                          type="button"
+                          className="delete-action"
+                          disabled={!access.canDelete || access.saving || busy}
+                          onClick={() => deleteMember(m)}
+                          aria-label={`Supprimer ${m.name}`}
+                        >
+                          Supprimer
+                        </button>
+                      )}
                       <ImageUpload
                         label={`Photo de ${m.name}`}
                         value={m.photo}
@@ -1221,6 +1296,10 @@ function App() {
               <MeetingForm
                 meeting={modal.meeting}
                 members={p.members}
+                canDelete={access.canDelete && !access.saving && !busy}
+                isLeader={access.isLeader}
+                deletionReady={access.deletionReady}
+                onDelete={deleteEvent}
                 exportReport={exportMeeting}
                 exportAttendance={(m) => exportPresence([m])}
                 save={(m) => {
@@ -1516,6 +1595,10 @@ function MeetingForm({
   save,
   exportReport,
   exportAttendance,
+  canDelete,
+  isLeader,
+  deletionReady,
+  onDelete,
 }) {
   const [statuses, change] = useState({
     ...Object.fromEntries(members.map((m) => [m.id, "absent"])),
@@ -1525,6 +1608,22 @@ function MeetingForm({
     <>
       <div className="eyebrow">SECRÉTARIAT · RAPPORT & PRÉSENCES</div>
       <h2>{meeting ? "Le carnet de réunion" : "Une nouvelle réunion"}</h2>
+      {meeting && isLeader && !deletionReady && (
+        <p className="deletion-setup">
+          La suppression sécurisée attend l’activation de la mise à jour
+          Supabase.
+        </p>
+      )}
+      {meeting && isLeader && (
+        <button
+          type="button"
+          className="delete-action"
+          disabled={!canDelete}
+          onClick={() => onDelete(meeting)}
+        >
+          Supprimer la réunion
+        </button>
+      )}
       {meeting && (
         <div className="actions meeting-exports">
           <button

@@ -19,3 +19,11 @@ Treasury/secretariat updates use revision checks to avoid overwriting another us
 `npx playwright test --config playwright.access.config.js` tests the Google redirect, PKCE code exchange, remembered session, selected-patrol return, disallowed accounts, cross-patrol restrictions and cancelled login using a simulated Supabase server.
 
 These tests do not prove that the live Google/Supabase provider or RLS settings have been applied. Live validation requires the public project configuration, the Google provider already configured by the owner, the app URL on Supabase's redirect allowlist, and a deployed build.
+
+## Leader-only member/event deletion
+
+Run `leader-deletion.sql` once in the existing project's SQL Editor, then refresh the app. It changes no existing records or access-list entries. No new project, Google setting or API key is needed.
+
+Only `gsvnsdl2006@gmail.com` and `troupeoriongsvn@gmail.com` see the delete controls. The controls remain disabled until the server confirms that the database deletion guard exists. A PostgreSQL trigger rejects removal or replacement of existing member/event IDs by any other authenticated account, including direct JSON API updates. Normal authorized edits remain allowed. Leaders confirm deletion; removing a member preserves that member's name in historical meeting attendance and Word/Excel attendance exports. Removing a meeting removes its attendance from statistics.
+
+Local PostgreSQL tests execute the actual setup and migration using PGlite, with authenticated JWT claim fixtures and RLS roles. Browser tests cover both leaders, a patrol account and a missing migration. Passing these tests does not apply the migration to the live project.
