@@ -1,3 +1,7 @@
+import BadgeMemoryPanel from "./BadgeMemoryPanel";
+import ProgressDashboard from "./ProgressDashboard";
+import { recoverPhotos } from "./photo-vault";
+import useBadgePhotos from "./useBadgePhotos";
 import { removeMember, attendanceMembers } from "./leader-policy";
 import Codes from "./Codes";
 import { readLoginReturn } from "./auth-context";
@@ -106,27 +110,65 @@ function App() {
           [{ date: Date.now(), payload: previous }, ...history].slice(0, 3),
         );
       }
-      setData((latest) => {
-        if (!latest) return latest;
-        const next = structuredClone(latest);
-        Object.assign(next.patrols[patrol], payload);
-        set("nexus-data", next).catch(() =>
-          notify("Impossible de sauvegarder la copie locale."),
-        );
-        return next;
-      });
+      const latest = dataRef.current;
+      if (!latest) return;
+      const next = structuredClone(latest);
+      Object.assign(next.patrols[patrol], payload);
+      replaceData(next);
     },
     section,
+    Boolean(data),
   );
+  const badgePhotos = useBadgePhotos({
+    ready: Boolean(data),
+    user: access.user,
+    onPhotos: (photos) => {
+      const latest = dataRef.current;
+      if (!latest) return;
+      const changed = Object.fromEntries(
+        Object.entries(photos).filter(
+          ([id, image]) => latest.badgeImages?.[id] !== image,
+        ),
+      );
+      if (!Object.keys(changed).length) return;
+      update((d) => {
+        d.badgeImages = { ...d.badgeImages, ...changed };
+      });
+    },
+  });
+  const writes = useRef(Promise.resolve());
+  function persistSnapshot(next) {
+    writes.current = writes.current
+      .catch(() => {})
+      .then(() => set("nexus-data", next));
+    const write = writes.current;
+    write
+      .then(() => {
+        if (dataRef.current === next)
+          setSaveState("Enregistré sur cet appareil");
+      })
+      .catch(() => {
+        setSaveState("Échec de sauvegarde");
+        notify(
+          "Stockage indisponible. Votre photo peut être récupérée depuis le coffre local ou sa sauvegarde permanente.",
+        );
+      });
+    return write;
+  }
+  function replaceData(next) {
+    dataRef.current = next;
+    setData(next);
+    setSaveState("Enregistrement…");
+    return persistSnapshot(next);
+  }
   useEffect(() => {
     sessionStorage.removeItem("nexus-drive-session");
     get("nexus-data")
-      .then((d) => {
-        if (d?.badges?.every((b) => b.includes("à nommer"))) {
-          d.badges = [...officialBadges];
-          set("nexus-data", d);
-        }
-        setData(d || initial());
+      .then(async (d) => {
+        const restored = await recoverPhotos(d || initial());
+        if (restored.badges?.every((b) => b.includes("à nommer")))
+          restored.badges = [...officialBadges];
+        await replaceData(restored);
       })
       .catch(() =>
         setNotice("Impossible de lire les données locales. Rechargez la page."),
@@ -140,25 +182,21 @@ function App() {
     setTimeout(() => setNotice(""), 6500);
   };
   function update(fn) {
-    const next = structuredClone(data);
+    const previous = dataRef.current;
+    if (!previous) return;
+    const next = structuredClone(previous);
     fn(next);
-    next.updated = Math.max(Date.now(), (data.updated || 0) + 1);
-    setData(next);
-    setSaveState("Enregistrement…");
-    set("nexus-data", next)
-      .then(() => setSaveState("Enregistré sur cet appareil"))
-      .catch(() => {
-        setSaveState("Échec de sauvegarde");
-        notify("Stockage plein ou indisponible. Exportez vos données.");
-      });
+    next.updated = Math.max(Date.now(), (previous.updated || 0) + 1);
+    replaceData(next);
     return next;
   }
   function patch(fn) {
+    const previous = privatePayload(dataRef.current.patrols[patrol]);
     const next = update((d) => fn(d.patrols[patrol]));
     if (
       access.authorized &&
       JSON.stringify(privatePayload(next.patrols[patrol])) !==
-        JSON.stringify(privatePayload(data.patrols[patrol]))
+        JSON.stringify(previous)
     )
       access.save(next.patrols[patrol]);
   }
@@ -1022,6 +1060,7 @@ function App() {
                     />
                   </label>
                 </div>
+                <ProgressDashboard patrol={p} member={member} />
                 <p className="hint">
                   Le nom sélectionne un carnet ; il ne constitue pas une
                   authentification. Catalogue des 93 badges fourni par la
@@ -1040,12 +1079,14 @@ function App() {
                       b.toLowerCase().includes(search.toLowerCase()),
                     )
                     .map(({ b, i }) => {
+                      const completed =
+                        p.badgeCompletions?.[member]?.[i]?.completed === true;
                       const entries = p.progress.filter(
                         (e) => e.member === member && e.badge === i,
                       );
                       return (
                         <button
-                          className={`badge-card ${entries.length ? "documented" : ""}`}
+                          className={`badge-card ${completed ? "completed" : entries.length ? "documented" : ""}`}
                           key={i}
                           onClick={() =>
                             member
@@ -1056,6 +1097,7 @@ function App() {
                           <span className="badge-emblem">
                             {data.badgeImages?.[i] ? (
                               <img
+                                loading="lazy"
                                 src={data.badgeImages[i]}
                                 alt={`Photo ${b}`}
                               />
@@ -1072,9 +1114,11 @@ function App() {
                           </small>
                           <h3>{b}</h3>
                           <span>
-                            {entries.length
-                              ? `${entries.length} réalisation${entries.length > 1 ? "s" : ""}`
-                              : "Commencer mon carnet"}{" "}
+                            {completed
+                              ? "✓ Terminé"
+                              : entries.length
+                                ? `${entries.length} réalisation${entries.length > 1 ? "s" : ""}`
+                                : "Commencer mon carnet"}{" "}
                             <Plus size={13} />
                           </span>
                         </button>
@@ -1330,13 +1374,44 @@ function App() {
                 <ImageUpload
                   label="Photo du badge"
                   value={data.badgeImages?.[modal.badge]}
-                  onChange={(photo) =>
-                    update((d) => {
-                      d.badgeImages ??= {};
-                      d.badgeImages[modal.badge] = photo;
-                    })
-                  }
+                  onChange={(photo) => badgePhotos.save(modal.badge, photo)}
                 />
+                <div className="photo-backup-status" role="status">
+                  <strong>{badgePhotos.status}</strong>
+                  {badgePhotos.conflicts.includes(modal.badge) &&
+                    access.user && (
+                      <button
+                        className="secondary"
+                        onClick={() => {
+                          if (
+                            confirm(
+                              "Partager cette photo locale à la place de la photo actuelle ? L’ancienne version restera conservée.",
+                            )
+                          )
+                            run(() => badgePhotos.resolveConflict(modal.badge));
+                        }}
+                      >
+                        Sauvegarder cette version
+                      </button>
+                    )}
+                  {badgePhotos.pending > 0 && (
+                    <span>
+                      {badgePhotos.pending} photo(s) en attente de sauvegarde
+                      permanente.
+                    </span>
+                  )}
+                  {!access.user && (
+                    <button
+                      className="secondary"
+                      onClick={() => run(() => access.signInGoogle())}
+                    >
+                      Connecter Google pour protéger les photos
+                    </button>
+                  )}
+                  <button className="text-btn" onClick={badgePhotos.refresh}>
+                    Vérifier la sauvegarde
+                  </button>
+                </div>
                 {modal.type === "badge-photo" && (
                   <p className="hint">
                     Choisissez votre nom dans la progression pour ajouter vos
@@ -1348,6 +1423,34 @@ function App() {
             {modal.type === "progress" && <>{inlineSaveStatus}</>}
             {modal.type === "progress" && (
               <ProgressForm
+                memory={{
+                  title: [
+                    "Promesse",
+                    "2nde classe",
+                    "Première classe",
+                    "Raider",
+                    ...data.badges,
+                  ][modal.badge],
+                  member: p.members.find((m) => m.id === member),
+                  patrol,
+                  cover: data.badgeImages?.[modal.badge],
+                  completionDate:
+                    p.badgeCompletions?.[member]?.[modal.badge]?.date,
+                }}
+                completed={
+                  p.badgeCompletions?.[member]?.[modal.badge]?.completed ===
+                  true
+                }
+                onCompleted={(completed) =>
+                  patch((p) => {
+                    p.badgeCompletions ??= {};
+                    p.badgeCompletions[member] ??= {};
+                    p.badgeCompletions[member][modal.badge] = {
+                      completed,
+                      date: today(),
+                    };
+                  })
+                }
                 title={
                   [
                     "Promesse",
@@ -1460,6 +1563,55 @@ function App() {
                   </div>
                 </div>
                 <div className="settings-block">
+                  <h3>Photos des badges · coffre permanent</h3>
+                  <p>
+                    Les photos sont conservées dans un coffre local indépendant
+                    des imports et sauvegardées dans le stockage permanent du
+                    site avec un compte de troupe connecté. Elles ne sont pas
+                    rangées dans les fichiers de déploiement.
+                  </p>
+                  <p className="photo-backup-status" role="status">
+                    {badgePhotos.status}
+                    {badgePhotos.pending > 0
+                      ? ` · ${badgePhotos.pending} en attente`
+                      : ""}
+                  </p>
+                  <div className="actions">
+                    <button
+                      className="secondary"
+                      onClick={() =>
+                        run(async () => {
+                          const restored = await recoverPhotos(dataRef.current);
+                          await replaceData(restored);
+                          badgePhotos.refresh();
+                          notify(
+                            "Coffre local vérifié. Les photos encore présentes ont été restaurées.",
+                          );
+                        })
+                      }
+                    >
+                      Récupérer les photos locales
+                    </button>
+                    <button className="secondary" onClick={badgePhotos.refresh}>
+                      Vérifier la sauvegarde distante
+                    </button>
+                    {!access.user && access.configured && (
+                      <button
+                        className="primary"
+                        onClick={() => run(() => access.signInGoogle())}
+                      >
+                        Connecter mon compte pour protéger les photos
+                      </button>
+                    )}
+                  </div>
+                  <p className="hint">
+                    Sur un nouvel appareil, les photos déjà sauvegardées se
+                    chargent automatiquement. Les photos restées uniquement sur
+                    un ancien appareil doivent d’abord être sauvegardées depuis
+                    cet appareil, ou importées depuis sa copie JSON.
+                  </p>
+                </div>
+                <div className="settings-block">
                   <h3>Une copie à emporter</h3>
                   <div className="actions">
                     <button
@@ -1485,15 +1637,16 @@ function App() {
                           if (
                             file &&
                             confirm(
-                              "Remplacer les données locales par ce fichier ?",
+                              "Importer ce fichier ? Les photos actuellement conservées dans le coffre seront préservées.",
                             )
                           )
                             run(async () => {
                               const d = JSON.parse(await file.text());
                               if (!validBackup(d))
                                 throw Error("Fichier Nexus incompatible.");
-                              await set("nexus-data", d);
-                              setData(d);
+                              const restored = await recoverPhotos(d);
+                              await replaceData(restored);
+                              badgePhotos.refresh();
                               notify("Données importées.");
                             });
                           e.target.value = "";
@@ -1719,7 +1872,14 @@ function MeetingForm({
     </>
   );
 }
-function ProgressForm({ title, entries, save }) {
+function ProgressForm({
+  title,
+  entries,
+  save,
+  completed,
+  onCompleted,
+  memory,
+}) {
   const [photos, setPhotos] = useState([]),
     [error, setError] = useState(""),
     [reading, setReading] = useState(false);
@@ -1727,6 +1887,25 @@ function ProgressForm({ title, entries, save }) {
     <>
       <div className="eyebrow">MON CARNET DE PROGRESSION</div>
       <h2>{title}</h2>
+      <label className="completion-toggle">
+        <span>
+          <strong>
+            {completed ? "Terminé · bravo !" : "Marquer comme terminé"}
+          </strong>
+          <small>
+            Ajoute tes réalisations ci-dessous pour documenter ton parcours.
+          </small>
+        </span>
+        <input
+          aria-label="Marquer comme terminé"
+          type="checkbox"
+          checked={completed}
+          onChange={(e) => onCompleted(e.target.checked)}
+        />
+      </label>
+      {memory?.member && (
+        <BadgeMemoryPanel {...memory} entries={entries} completed={completed} />
+      )}
       <div className="entry-list">
         {entries.map((e) => (
           <article key={e.id}>

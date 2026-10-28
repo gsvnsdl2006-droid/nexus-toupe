@@ -2,7 +2,12 @@ import { isLeader } from "./leader-policy.js";
 import { returnContextKey, loginReturnError } from "./auth-context.js";
 import { useEffect, useRef, useState } from "react";
 import { accessClient, privatePayload } from "./access";
-export default function usePrivateAccess(patrol, onRemote, section) {
+export default function usePrivateAccess(
+  patrol,
+  onRemote,
+  section,
+  ready = true,
+) {
   const [user, setUser] = useState(null),
     [allowed, setAllowed] = useState([]),
     [loading, setLoading] = useState(Boolean(accessClient)),
@@ -41,6 +46,7 @@ export default function usePrivateAccess(patrol, onRemote, section) {
   useEffect(() => {
     let active = true;
     setDeletionReady(false);
+    if (!ready) return;
     if (!accessClient || !user) {
       setAllowed([]);
       revisions.current.clear();
@@ -88,7 +94,7 @@ export default function usePrivateAccess(patrol, onRemote, section) {
     return () => {
       active = false;
     };
-  }, [user?.id, user?.email, patrol]);
+  }, [user?.id, user?.email, patrol, ready]);
   async function save(p) {
     if (!accessClient || !allowed.includes(patrol) || loading) return;
     pending.current.set(patrol, privatePayload(p));

@@ -46,3 +46,25 @@ La section Codes reprend le même moteur que `gsvnsdl2006-droid/nexus-ai-gsvn`, 
 ## Suppression des membres et réunions
 
 Seuls `gsvnsdl2006@gmail.com` et `troupeoriongsvn@gmail.com` peuvent supprimer un membre ou une réunion. Activer une fois la règle côté base en exécutant [supabase/leader-deletion.sql](supabase/leader-deletion.sql) dans le SQL Editor du projet existant. Les boutons restent désactivés tant que cette migration n’est pas installée. Les anciennes présences et le nom d’un membre supprimé sont conservés dans les réunions historiques et leurs exports. Une réunion supprimée ne compte plus dans les statistiques. Les tests PostgreSQL vérifient également le refus d’une suppression par un compte de patrouille via une mise à jour directe du JSON.
+
+## Badge photos that survive deployments
+
+Badge covers now have an independent local image vault and a versioned **site-wide Netlify Blobs** backup (`nexus-badge-images-v1`). The function uses Netlify's automatically supplied server-side Blobs context; no new service key, SQL migration or separate account is needed. It intentionally uses `getStore`, not deploy-specific storage. The frontend never receives a Netlify storage token.
+
+The same production origin keeps its IndexedDB vault through normal redeployments. On load/import, existing vault images are merged back rather than removed by an older JSON snapshot. Existing base64 badge covers are automatically migrated into the vault. Old images that have already disappeared from browser storage and were never backed up cannot be reconstructed by a deployment; recover them from a prior JSON backup or upload them once again.
+
+An approved, signed-in troop account automatically backs up pending badge covers. The server validates the Supabase session with Supabase and checks the existing RLS-protected access list before accepting an upload. Anonymous visitors can view the shared badge artwork but cannot overwrite it. Badge artwork is public progression content; private member images are not published by this endpoint. Existing member photographs continue to use their protected Supabase patrol record when that record is saved by an authorized user.
+
+The interface distinguishes a local copy, pending upload, successful permanent backup and failure. Offline copies are retained, with retry on reconnection/focus and bounded retries. Every badge has an independent immutable image version; optimistic head updates prevent a stale image from silently replacing someone else's cover. Different versions remain stored. A conflict keeps the local copy and can be resolved explicitly with « Sauvegarder cette version »; other badge uploads continue. Local JSON imports preserve images already in the vault. Archives & exports includes local recovery and remote-backup checks.
+
+Use the same Netlify site for future deployments. Deleting the site/store or deploying under a different site identity is not the same as redeploying the existing site. The live Blobs upload must be confirmed by the in-app permanent-backup status after Netlify deploys; local tests use a simulated store/API.
+
+## Progression dashboard and badge souvenirs
+
+Selecting a member displays a percentage ring and counts for 93 badges: completed, documented/in progress, and remaining. Completion is explicit (« Marquer comme terminé »); adding notes alone does not complete a badge. Promesse, 2nde classe, Première classe and Raider have separate completion indicators. These records remain in the member's local patrol data and full JSON backups.
+
+Each member can download a designed, personalized badge PDF with the badge title, name, patrol, completion date, selected cover, notes and selected achievement photos. Notes and images can be included independently. Long journals paginate; browser-rendered text preserves accents and the browser's font shaping. The PDF is a visual keepsake, with rendered page images, and can be kept outside the app. Its generated filename includes the badge and member names.
+
+## Phone home-screen icon
+
+The web manifest and iOS touch icon use the green Nexus/Orion artwork: Nexus lettering, the Orion archer replacing the central cross, and green orbital accents. Android has a separate padded maskable icon. Existing saved shortcuts may retain an OS-cached icon: remove and add the shortcut again to pick up the new artwork. The manifest does not claim offline app startup; it supplies shortcut branding and standalone display.

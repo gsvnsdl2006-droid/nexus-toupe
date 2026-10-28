@@ -2649,3 +2649,316 @@ input[type="file"] {
   border-radius: 8px;
   background: #302c1b;
 }
+.photo-backup-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #4e7048;
+  background: #1b3c27;
+  border-radius: 10px;
+  padding: 15px;
+  color: #cce6b1;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 18px 0;
+}
+.photo-backup-status > strong,
+.photo-backup-status > span {
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+.photo-backup-status > strong {
+  font-weight: 500;
+}
+.photo-backup-status .secondary {
+  font-size: 11px;
+}
+@media (max-width: 760px) {
+  .photo-backup-status {
+    font-size: 11px;
+    padding: 13px;
+  }
+  .photo-backup-status .secondary {
+    width: 100%;
+    font-size: 11px;
+  }
+}
+.progress-dashboard {
+  border: 1px solid var(--accent-line);
+  border-radius: 15px;
+  background: linear-gradient(140deg, var(--accent-bg), #142f1e);
+  padding: 25px;
+  margin: 22px 0 28px;
+}
+.progress-dashboard-main {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+}
+.progress-dashboard-main h3 {
+  font-size: 24px;
+  margin: 12px 0 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.progress-dashboard-main p {
+  font-size: 15px;
+  margin: 0 0 10px;
+  color: #cee0bb;
+}
+.progress-dashboard-main small {
+  font-size: 11px;
+  line-height: 1.7;
+  color: #aec39e;
+}
+.progress-ring strong {
+  font-size: 25px;
+}
+.progress-dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 24px 0;
+}
+.progress-dashboard-stats > div {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #0c241987;
+  border: 1px solid #516c4266;
+  border-radius: 10px;
+  padding: 17px;
+}
+.progress-dashboard-stats svg {
+  color: var(--accent);
+}
+.progress-dashboard-stats strong {
+  font-size: 25px;
+  color: var(--accent);
+}
+.progress-dashboard-stats span {
+  font-size: 12px;
+  color: #c8d9b6;
+}
+.progress-stages {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: #a8bd96;
+  align-items: center;
+}
+.progress-stages > span:not(:first-child) {
+  border: 1px solid #4c6544;
+  border-radius: 20px;
+  padding: 7px 10px;
+}
+.progress-stages .done {
+  background: #34562f;
+  color: #d9eac5;
+  border-color: #8cae67;
+}
+.completion-toggle {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 17px;
+  background: #26472d;
+  border: 1px solid #6a8b50;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+.completion-toggle strong {
+  font-size: 14px;
+  display: block;
+}
+.completion-toggle small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #b7cea4;
+  margin-top: 6px;
+}
+.completion-toggle input {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  flex-shrink: 0;
+  accent-color: #bbd991;
+  margin: 0;
+}
+.badge-card.completed {
+  background: linear-gradient(140deg, var(--accent-bg), #28482b);
+  border: 1px solid var(--accent);
+}
+.badge-card.completed > span:last-child {
+  color: var(--accent);
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .progress-dashboard {
+    padding: 20px 15px;
+    border-radius: 12px;
+  }
+  .progress-dashboard-main {
+    align-items: start;
+    gap: 14px;
+  }
+  .progress-ring {
+    width: 92px;
+    height: 92px;
+  }
+  .progress-ring strong {
+    font-size: 20px;
+  }
+  .progress-dashboard-main h3 {
+    font-size: 20px;
+    margin: 10px 0 7px;
+  }
+  .progress-dashboard-main .eyebrow {
+    font-size: 7px;
+    letter-spacing: 1px;
+  }
+  .progress-dashboard-main p {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .progress-dashboard-main small {
+    font-size: 10px;
+  }
+  .progress-dashboard-stats {
+    gap: 8px;
+    margin: 20px 0;
+  }
+  .progress-dashboard-stats > div {
+    padding: 13px 8px;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .progress-dashboard-stats strong {
+    font-size: 23px;
+  }
+  .progress-dashboard-stats span {
+    font-size: 10px;
+  }
+  .progress-dashboard-stats svg {
+    width: 18px;
+  }
+  .progress-stages {
+    font-size: 10px;
+    gap: 7px;
+  }
+  .progress-stages > span:first-child {
+    width: 100%;
+    margin-bottom: 4px;
+  }
+  .progress-stages > span:not(:first-child) {
+    padding: 6px 8px;
+  }
+  .completion-toggle {
+    padding: 16px 13px;
+  }
+  .completion-toggle strong {
+    font-size: 13px;
+  }
+  .completion-toggle small {
+    font-size: 11px;
+  }
+}
+.badge-memory-panel {
+  padding: 20px;
+  border: 1px solid #64824a;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #24472c, #193620);
+  margin: 24px 0;
+}
+.badge-memory-panel h3 {
+  font-size: 20px !important;
+  margin: 13px 0 10px !important;
+}
+.badge-memory-panel p {
+  color: #b3ca9f;
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0 0 18px;
+}
+.memory-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 12px 0;
+}
+.memory-choice input,
+.memory-photo-choices input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  accent-color: #bbd891;
+  flex-shrink: 0;
+  margin: 0;
+}
+.memory-photo-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 20px 0;
+}
+.memory-photo-choices > label {
+  display: block;
+  border: 1px solid #52723f;
+  padding: 9px;
+  border-radius: 8px;
+  margin: 0;
+  min-width: 0;
+}
+.memory-photo-choices img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 5px;
+}
+.memory-photo-choices span {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+.badge-memory-panel > .primary {
+  margin-top: 16px;
+  width: 100%;
+}
+@media (max-width: 760px) {
+  .badge-memory-panel {
+    padding: 18px 14px;
+  }
+  .badge-memory-panel h3 {
+    font-size: 18px !important;
+  }
+  .memory-choice {
+    font-size: 11px;
+    gap: 8px;
+  }
+  .badge-memory-panel .eyebrow {
+    font-size: 7px !important;
+    letter-spacing: 1px;
+  }
+  .memory-photo-choices {
+    gap: 9px;
+  }
+  .memory-photo-choices img {
+    height: 95px;
+  }
+  .memory-photo-choices span {
+    font-size: 9px;
+  }
+  .badge-memory-panel > .primary {
+    font-size: 11px;
+    padding: 13px 10px;
+  }
+}
