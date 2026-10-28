@@ -29,10 +29,12 @@ Chaque membre peut recevoir une photo. Chaque badge/étape peut recevoir une ima
 
 La connexion Google via Supabase vérifie l’adresse et mémorise la session. Elle est distincte de Google Drive : aucun code e-mail, SMTP, Resend ou accès Drive n’est nécessaire. Les règles RLS protègent les données distantes de trésorerie/secrétariat. Voir [supabase/README.md](supabase/README.md) et exécuter [supabase/setup.sql](supabase/setup.sql).
 
-Les deux maîtrises confirmées sont prévues dans le SQL : `gsvnsdl2006@gmail.com` et `troupeoriongsvn@gmail.com`. Les six adresses de patrouille confirmées sont également dans le SQL. Il reste à ajouter la configuration publique du projet Supabase (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, ou les identifiants publics dans `src/project-config.js`). Aucune clé secret/service_role ne doit apparaître dans le frontend.
+Les deux maîtrises confirmées sont prévues dans le SQL : `gsvnsdl2006@gmail.com` et `troupeoriongsvn@gmail.com`. Les six adresses de patrouille confirmées sont également dans le SQL. La configuration publique du projet Supabase est maintenant intégrée dans `src/project-config.js`. Les variables `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY` restent des surcharges optionnelles. Aucune clé secret/service_role ne doit apparaître dans le frontend.
 
 **Sans cette configuration, la restriction n'est pas active.** Un message l'indique dans les deux sections ; l'application conserve le mode local. Une fois configurée, une connexion Google vérifiée et une entrée d'accès côté base sont nécessaires : saisir simplement une adresse ne donne pas accès. Les clients ne peuvent pas modifier les autorisations. Les anciennes copies locales et exports ne sont pas chiffrés ou effacés par la nouvelle protection. La progression reste locale sans connexion.
 
 ## Validation
 
 Les tests couvrent l'isolation des patrouilles, les taux de présence, la lecture effective des classeurs exportés (données, formules, styles), les rapports Word, les photos, la persistance et l'affichage mobile. L'accès réel par e-mail doit être validé sur un projet Supabase configuré, avec les politiques RLS appliquées et l'envoi de codes opérationnel ; aucun test local ne prouve à lui seul cette activation.
+
+Les tests Playwright lancent Vite en mode `test`, qui utilise un projet local vide ou un serveur Supabase simulé ; ils ne contactent pas le projet de production. La compilation normale utilise les identifiants publics fournis par le propriétaire.

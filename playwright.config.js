@@ -11,9 +11,9 @@ export default defineConfig({
   webServer: process.env.TEST_BASE_URL
     ? undefined
     : {
-        command: "npm run dev -- --port 5173",
+        command: "npm run dev -- --mode test --port 5173",
         url: "http://127.0.0.1:5173",
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: false,
       },
   reporter: "list",
 });

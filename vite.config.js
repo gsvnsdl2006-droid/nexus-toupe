@@ -1,5 +1,19 @@
 import { defineConfig } from "vite";
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  resolve: {
+    alias:
+      mode === "test"
+        ? [
+            {
+              find: /^\.\/project-config\.js$/,
+              replacement: new URL(
+                "./test-support/project-config.js",
+                import.meta.url,
+              ).pathname,
+            },
+          ]
+        : [],
+  },
   build: {
     rollupOptions: {
       output: {
@@ -7,4 +21,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
