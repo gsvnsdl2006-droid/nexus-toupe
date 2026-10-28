@@ -1,4 +1,12 @@
 let token;
+let expiresAt = 0;
+export class DriveError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.code = code;
+  }
+}
+
 export async function connect(clientId) {
   if (!clientId)
     throw Error(
@@ -19,10 +27,12 @@ export async function connect(clientId) {
       .initTokenClient({
         client_id: clientId,
         scope: "https://www.googleapis.com/auth/drive.file",
-        callback: (r) =>
-          r.access_token
-            ? resolve(r.access_token)
-            : reject(Error(r.error_description || r.error)),
+        callback: (r) => {
+          if (r.access_token) {
+            expiresAt = Date.now() + Number(r.expires_in || 3600) * 1000;
+            resolve(r.access_token);
+          } else reject(Error(r.error_description || r.error));
+        },
         error_callback: () => reject(Error("Connexion Google annulée.")),
       })
       .requestAccessToken(),
@@ -33,10 +43,22 @@ export function disconnect() {
   token = null;
 }
 async function request(url, options = {}) {
+  if (!token || Date.now() >= expiresAt)
+    throw new DriveError(
+      "Reconnectez Google pour reprendre l’archivage automatique.",
+      "AUTH",
+    );
   const r = await fetch(url, {
     ...options,
     headers: { Authorization: `Bearer ${token}`, ...options.headers },
   });
+  if (r.status === 401) {
+    token = null;
+    throw new DriveError(
+      "Votre connexion Google a expiré. Reconnectez-vous pour reprendre l’archivage automatique.",
+      "AUTH",
+    );
+  }
   if (!r.ok) throw Error(`Google Drive (${r.status}) : ${await r.text()}`);
   return r.status === 204 ? null : r.json();
 }
@@ -85,25 +107,47 @@ async function put(name, parent, blob, mimeType) {
     { method: old ? "PATCH" : "POST", body },
   );
 }
-export async function sync(data, workbook) {
+export async function sync(data, workbook, options = {}) {
   if (!token) throw Error("Connectez Google Drive avant de synchroniser.");
+  if (Object.hasOwn(options, "expectedRevision")) {
+    const remote = await readArchive();
+    if ((remote?.updated ?? null) !== options.expectedRevision)
+      throw new DriveError(
+        "L’archive a changé sur un autre appareil. Choisissez quelle version conserver dans Archives & Drive.",
+        "CONFLICT",
+      );
+  }
+  const previous = options.previous;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const root = await folder("Nexus Troupe Orion");
   for (const [name, p] of Object.entries(data.patrols)) {
+    const old = previous?.patrols?.[name];
+    if (same(p, old)) continue;
     const dir = await folder(name, root);
-    await put(
-      `cashflow patrouille ${name.toLowerCase()}`,
-      dir,
-      await workbook("cashflow", name),
-      "application/vnd.google-apps.spreadsheet",
-    );
-    await put(
-      `Dossier de camp ${name}`,
-      dir,
-      await workbook("camp", name),
-      "application/vnd.google-apps.spreadsheet",
-    );
+    if (!same(p.transactions, old?.transactions))
+      await put(
+        `cashflow patrouille ${name.toLowerCase()}`,
+        dir,
+        await workbook("cashflow", name),
+        "application/vnd.google-apps.spreadsheet",
+      );
+    if (!same(p.camp, old?.camp))
+      await put(
+        `Dossier de camp ${name}`,
+        dir,
+        await workbook("camp", name),
+        "application/vnd.google-apps.spreadsheet",
+      );
     const meetings = await folder("Réunions", dir);
     for (const m of p.meetings) {
+      if (
+        same(
+          m,
+          old?.meetings.find((x) => x.id === m.id),
+        ) &&
+        same(p.members, old?.members)
+      )
+        continue;
       const html = `<html><meta charset="utf-8"><h1>${escapeHtml(m.title)}</h1><p>${escapeHtml(m.date)}</p><p>${escapeHtml(m.summary).replaceAll("\n", "<br>")}</p><h2>Présences</h2><ul>${Object.entries(
         m.attendance,
       )
@@ -122,6 +166,16 @@ export async function sync(data, workbook) {
     const progression = await folder("Progression", dir);
     for (const e of p.progress) {
       for (const photo of e.photos || []) {
+        if (
+          old?.progress.some(
+            (entry) =>
+              entry.id === e.id &&
+              entry.photos?.some(
+                (prior) => prior.id === photo.id && prior.data === photo.data,
+              ),
+          )
+        )
+          continue;
         const blob = await (await fetch(photo.data)).blob();
         await put(
           `${e.id}-${photo.id}-${photo.name}`,
@@ -148,10 +202,15 @@ export async function sync(data, workbook) {
 }
 export async function restore() {
   if (!token) throw Error("Connectez Google Drive.");
+  const data = await readArchive();
+  if (!data) throw Error("Aucune archive Nexus trouvée.");
+  return data;
+}
+export async function readArchive() {
   const root = await find("Nexus Troupe Orion");
-  if (!root) throw Error("Aucune archive Nexus trouvée.");
+  if (!root) return null;
   const file = await find("nexus-backup.json", root.id);
-  if (!file) throw Error("Aucune sauvegarde trouvée.");
+  if (!file) return null;
   return request(
     `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
   );

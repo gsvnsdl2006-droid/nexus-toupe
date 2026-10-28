@@ -37,16 +37,14 @@ test("patrol workflows persist and remain isolated", async ({ page }) => {
   await page
     .getByLabel("Ce que j’ai accompli")
     .fill("Participation au service de la paroisse.");
-  await page
-    .locator(".photo-upload input")
-    .setInputFiles({
-      name: "preuve.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
-        "base64",
-      ),
-    });
+  await page.locator(".photo-upload input").setInputFiles({
+    name: "preuve.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
   await page.getByRole("button", { name: "Ajouter une réalisation" }).click();
   await expect(page.locator(".entry-list")).toContainText(
     "Participation au service",
@@ -92,6 +90,28 @@ test("mobile landing and patrol navigation fit the viewport", async ({
   await page.getByRole("button", { name: /PATROUILLE 06/ }).click();
   await page.getByRole("button", { name: "Progression", exact: true }).click();
   await expect(page.locator(".badge-card")).toHaveCount(97);
+  await page.setViewportSize({ width: 320, height: 740 });
+  await expect(
+    page.getByRole("img", { name: "Logo Nexus", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Logo Troupe Orion", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Secrétariat", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Dossier de camp", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Fiche mobile", exact: true }),
+  ).toHaveClass("active");
+  await page.locator(".camp-select").selectOption("4");
+  await page.getByLabel("Ligne du dossier", { exact: true }).selectOption("9");
+  await page
+    .getByLabel("5-Objectifs A10", { exact: true })
+    .fill("Autonomie sur mobile");
+  const dock = await page.locator(".mobile-dock").boundingBox();
+  expect(dock.y + dock.height).toBeLessThanOrEqual(741);
+
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

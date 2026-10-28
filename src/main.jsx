@@ -1,7 +1,8 @@
+import { slogans } from "./patrols.js";
 import "@fontsource-variable/dm-sans";
 import "@fontsource-variable/manrope";
 import { badges as officialBadges } from "./badges.js";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { get, set } from "idb-keyval";
 import * as XLSX from "xlsx";
@@ -44,6 +45,7 @@ import {
 } from "./model";
 import * as drive from "./drive";
 import "./style.css";
+import "./dark.css";
 const icons = [Bird, Flame, Compass, Shield, Leaf, Mountain];
 const money = (n) =>
   new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(n);
@@ -55,6 +57,20 @@ const readFile = (file) =>
     r.readAsDataURL(file);
   });
 function App() {
+  const syncing = useRef(false);
+  const remoteSnapshot = useRef(null);
+  const retries = useRef(0);
+  const [autoSync, setAutoSync] = useState(
+    localStorage.getItem("nexus-auto-sync") !== "false",
+  );
+  const [archivedRevision, setArchivedRevision] = useState(
+    Number(localStorage.getItem("nexus-archived-revision") || 0),
+  );
+  const [cloudStatus, setCloudStatus] = useState("Connecter Google");
+  const [conflict, setConflict] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
+  const [online, setOnline] = useState(navigator.onLine);
+
   const [data, setData] = useState(null),
     [patrol, selectPatrol] = useState(null),
     [section, setSection] = useState("overview"),
@@ -91,6 +107,9 @@ function App() {
       .then((r) => r.arrayBuffer())
       .then((b) => setCampBook(XLSX.read(b)));
   }, []);
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [patrol, section]);
   const notify = (s) => {
     setNotice(s);
     setTimeout(() => setNotice(""), 6500);
@@ -98,7 +117,7 @@ function App() {
   function update(fn) {
     const next = structuredClone(data);
     fn(next);
-    next.updated = Date.now();
+    next.updated = Math.max(Date.now(), (data.updated || 0) + 1);
     setData(next);
     setSaveState("Enregistrement…");
     set("nexus-data", next)
@@ -111,10 +130,10 @@ function App() {
   function patch(fn) {
     update((d) => fn(d.patrols[patrol]));
   }
-  async function workbook(kind, name) {
+  async function workbook(kind, name, snapshot = data) {
     const b = await (await fetch(`/templates/${kind}.xlsx`)).arrayBuffer();
     const wb = XLSX.read(b);
-    const p = data.patrols[name];
+    const p = snapshot.patrols[name];
     if (kind === "cashflow") {
       for (const a of activities) {
         const rows = p.transactions.filter((t) => t.activity === a);
@@ -171,20 +190,162 @@ function App() {
       setBusy(false);
     }
   }
+  async function archive(snapshot, force = false) {
+    if (syncing.current || !connected || !online) return;
+    syncing.current = true;
+    setCloudStatus("Archivage en cours…");
+    try {
+      const stamp = await drive.sync(
+        snapshot,
+        (kind, name) => workbook(kind, name, snapshot),
+        force
+          ? {}
+          : {
+              expectedRevision: remoteSnapshot.current?.updated ?? null,
+              previous: remoteSnapshot.current,
+            },
+      );
+      remoteSnapshot.current = snapshot;
+      setArchivedRevision(snapshot.updated);
+      localStorage.setItem("nexus-archived-revision", String(snapshot.updated));
+      setLastSync(stamp);
+      localStorage.setItem("nexus-last-sync", stamp);
+      retries.current = 0;
+      setCloudStatus("À jour sur Drive");
+    } catch (e) {
+      if (e.code === "AUTH") {
+        setConnected(false);
+        setCloudStatus("Google à reconnecter");
+      } else if (e.code === "CONFLICT") {
+        setConflict(true);
+        setCloudStatus("Deux versions à vérifier");
+      } else {
+        retries.current += 1;
+        setCloudStatus(
+          retries.current <= 3
+            ? "Échec réseau · nouvelle tentative prévue"
+            : "Archivage suspendu · réessayer",
+        );
+      }
+      notify(e.message);
+    } finally {
+      syncing.current = false;
+      setRetryTick((n) => n + 1);
+    }
+  }
   async function sync() {
     if (
+      conflict &&
       !confirm(
-        "Archiver les données de cet appareil dans Drive ? Si une autre personne a modifié l’archive, restaurez-la avant de continuer. Les fichiers correspondants seront remplacés.",
+        "Remplacer la version Drive par les données de cet appareil ? Exportez les deux versions avant de continuer.",
       )
     )
       return;
-    await run(async () => {
-      const stamp = await drive.sync(data, workbook);
-      setLastSync(stamp);
-      localStorage.setItem("nexus-last-sync", stamp);
-      notify("Les 6 patrouilles ont été archivées dans Google Drive.");
-    });
+    retries.current = 0;
+    if (conflict) setConflict(false);
+    await archive(data, conflict);
   }
+  async function connectDrive() {
+    setConnected(false);
+    await drive.connect(client);
+    // Read the existing archive before enabling uploads on a new device.
+    const remote = await drive.readArchive();
+    if (remote && !validBackup(remote))
+      throw Error(
+        "Archive Drive incompatible. Aucune donnée n’a été remplacée.",
+      );
+    remoteSnapshot.current = remote;
+    const localEmpty =
+      Object.values(data.patrols).every(
+        (p) =>
+          !p.members.length &&
+          !p.transactions.length &&
+          !p.meetings.length &&
+          !p.progress.length &&
+          !Object.keys(p.camp).length,
+      ) && !data.branding;
+    const alreadyArchived = data.updated === archivedRevision;
+    if (
+      remote &&
+      (localEmpty || alreadyArchived || data.updated === remote.updated)
+    ) {
+      await set("nexus-data", remote);
+      setData(remote);
+      setArchivedRevision(remote.updated);
+      localStorage.setItem("nexus-archived-revision", String(remote.updated));
+      setConflict(false);
+      setCloudStatus("À jour sur Drive");
+    } else if (remote && remote.updated !== archivedRevision) {
+      setConflict(true);
+      setCloudStatus("Deux versions à vérifier");
+    } else {
+      setConflict(false);
+      setCloudStatus("Modifications en attente");
+    }
+    retries.current = 0;
+    setConnected(true);
+    notify(
+      "Google connecté. Vos prochaines modifications seront archivées automatiquement.",
+    );
+  }
+  useEffect(() => {
+    const refresh = () => {
+      setOnline(navigator.onLine);
+      retries.current = 0;
+      setRetryTick((n) => n + 1);
+    };
+    window.addEventListener("online", refresh);
+    window.addEventListener("offline", refresh);
+    return () => {
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("offline", refresh);
+    };
+  }, []);
+  useEffect(() => {
+    if (
+      !data ||
+      !connected ||
+      !autoSync ||
+      conflict ||
+      data.updated === archivedRevision ||
+      retries.current > 3
+    )
+      return;
+    if (!online) {
+      setCloudStatus("Hors ligne · sauvegarde locale");
+      return;
+    }
+    if (saveState !== "Enregistré sur cet appareil" || syncing.current) return;
+    setCloudStatus(
+      retries.current
+        ? "Nouvelle tentative prévue…"
+        : "Modifications en attente…",
+    );
+    const timer = setTimeout(
+      () => archive(data),
+      retries.current ? Math.min(30000, 5000 * 2 ** retries.current) : 2500,
+    );
+    return () => clearTimeout(timer);
+  }, [
+    data,
+    connected,
+    autoSync,
+    conflict,
+    archivedRevision,
+    retryTick,
+    online,
+    saveState,
+  ]);
+  useEffect(() => {
+    const pending = (e) => {
+      if (connected && autoSync && data?.updated !== archivedRevision) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", pending);
+    return () => window.removeEventListener("beforeunload", pending);
+  }, [data, connected, autoSync, archivedRevision]);
   function openPatrol(p) {
     selectPatrol(p);
     setSection("overview");
@@ -216,17 +377,13 @@ function App() {
           onClick={() => selectPatrol(null)}
           aria-label="Accueil Nexus"
         >
-          {data.branding?.nexus ? (
+          <span className="logo-window nexus-logo">
             <img
-              className="brand-image"
-              src={data.branding.nexus}
+              src={data.branding?.nexus || "/branding/logos.webp"}
+              className={data.branding?.nexus ? "custom-logo" : "logo-sprite"}
               alt="Logo Nexus"
             />
-          ) : (
-            <span className="nexus-mark">
-              N<span>✦</span>
-            </span>
-          )}
+          </span>
           <span>
             NEXUS<small>L’ESPACE DE LA TROUPE</small>
           </span>
@@ -255,30 +412,38 @@ function App() {
             <Settings size={18} />
           </button>
           <div className="orion-brand">
-            {data.branding?.orion ? (
+            <span className="logo-window orion-logo">
               <img
-                className="brand-image orion-image"
-                src={data.branding.orion}
+                src={data.branding?.orion || "/branding/logos.webp"}
+                className={data.branding?.orion ? "custom-logo" : "logo-sprite"}
                 alt="Logo Troupe Orion"
               />
-            ) : (
-              <Shield size={31} />
-            )}
+            </span>
             <span>
               TROUPE ORION<small>SAINT VINCENT DE PAUL · NACCACHE</small>
             </span>
           </div>
         </div>
       </header>
-      <main>
+      <main data-patrol={patrol ? patrols.indexOf(patrol) : undefined}>
         <div className="breadcrumb">
           <span>ESPACE TROUPE</span>
           <ChevronRight size={12} />
           <span>{patrol || "TABLEAU DE BORD"}</span>
-          <div className="local-status">
-            <i />
-            {saveState}
-          </div>
+          <button
+            className={`local-status cloud-status ${connected ? "connected" : ""}`}
+            onClick={() => setModal("settings")}
+            aria-label={`État de sauvegarde : ${!online ? "Hors ligne · sauvegarde locale" : connected || cloudStatus === "Google à reconnecter" ? cloudStatus : saveState}`}
+          >
+            <Cloud size={13} />
+            <span>
+              {!online
+                ? "Hors ligne · sauvegarde locale"
+                : connected || cloudStatus === "Google à reconnecter"
+                  ? cloudStatus
+                  : saveState}
+            </span>
+          </button>
         </div>
         {!patrol ? (
           <>
@@ -421,27 +586,14 @@ function App() {
                       onClick={() => openPatrol(name)}
                     >
                       <div className="card-top">
-                        <span className="patrol-icon">
-                          <Icon size={34} strokeWidth={1.4} />
-                        </span>
+                        <PatrolEmblem index={i} name={name} />
                         <ArrowUpRight className="card-arrow" size={22} />
                       </div>
                       <span className="card-label">
                         PATROUILLE {String(i + 1).padStart(2, "0")}
                       </span>
                       <h3>{name}</h3>
-                      <p>
-                        {
-                          [
-                            "Prendre de la hauteur.",
-                            "Avancer avec courage.",
-                            "Toujours un pas devant.",
-                            "La force du collectif.",
-                            "L’esprit vif, le cœur grand.",
-                            "Déterminés, ensemble.",
-                          ][i]
-                        }
-                      </p>
+                      <p>{slogans[i]}</p>
                       <div className="card-bottom">
                         <span>
                           <Users size={14} />
@@ -478,20 +630,26 @@ function App() {
               <ArrowLeft size={15} /> Toutes les patrouilles
             </button>
             <div className="patrol-title">
-              <div>
-                <div className="eyebrow">
-                  PATROUILLE{" "}
-                  {String(patrols.indexOf(patrol) + 1).padStart(2, "0")}
+              <div className="patrol-heading">
+                <PatrolEmblem index={patrols.indexOf(patrol)} name={patrol} />
+                <div>
+                  <div className="eyebrow">
+                    PATROUILLE{" "}
+                    {String(patrols.indexOf(patrol) + 1).padStart(2, "0")}
+                  </div>
+                  <h1>{patrol}</h1>
+                  <p className="patrol-slogan">
+                    {slogans[patrols.indexOf(patrol)]}
+                  </p>
+                  <p>{titles[section]}</p>
                 </div>
-                <h1>{patrol}</h1>
-                <p>{titles[section]}</p>
               </div>
               <button className="secondary" onClick={() => setModal("member")}>
                 <Users size={16} /> Gérer les membres{" "}
                 <span>{p.members.length}</span>
               </button>
             </div>
-            <div className="section-tabs">
+            <div className="section-tabs mobile-dock">
               {[
                 ["overview", "Vue d’ensemble", Compass],
                 ["treasury", "Trésorier", Wallet],
@@ -568,9 +726,8 @@ function App() {
                   <div>
                     <strong>Votre archive, votre histoire.</strong>
                     <p>
-                      Les données restent sur cet appareil. Connectez Google
-                      Drive pour les archiver et les restaurer sur un autre
-                      appareil.
+                      Connectez Google une fois : vos modifications seront
+                      archivées automatiquement après chaque changement.
                     </p>
                   </div>
                   <button
@@ -644,7 +801,7 @@ function App() {
                     Montants dans une même unité monétaire par patrouille.
                   </span>
                 </div>
-                <div className="table-wrap">
+                <div className="table-wrap treasury-table">
                   <table>
                     <thead>
                       <tr>
@@ -660,12 +817,14 @@ function App() {
                         .filter((t) => t.activity === activity)
                         .map((t) => (
                           <tr key={t.id}>
-                            <td>{t.date}</td>
-                            <td>{t.description}</td>
-                            <td className="positive">
+                            <td data-label="Date">{t.date}</td>
+                            <td data-label="Description">{t.description}</td>
+                            <td data-label="Entrée" className="positive">
                               {t.type === "in" ? money(t.amount) : "—"}
                             </td>
-                            <td>{t.type === "out" ? money(t.amount) : "—"}</td>
+                            <td data-label="Sortie">
+                              {t.type === "out" ? money(t.amount) : "—"}
+                            </td>
                             <td>
                               <button
                                 className="text-btn"
@@ -1305,14 +1464,10 @@ function App() {
                 <div className="actions">
                   <button
                     className="primary"
-                    disabled={busy}
+                    disabled={busy || cloudStatus === "Archivage en cours…"}
                     onClick={() =>
                       run(async () => {
-                        await drive.connect(client);
-                        setConnected(true);
-                        notify(
-                          "Google Drive connecté. Vous pouvez synchroniser.",
-                        );
+                        await connectDrive();
                       })
                     }
                   >
@@ -1326,7 +1481,7 @@ function App() {
                   {connected && (
                     <button
                       className="secondary"
-                      disabled={busy}
+                      disabled={busy || cloudStatus === "Archivage en cours…"}
                       onClick={() => {
                         drive.disconnect();
                         setConnected(false);
@@ -1337,27 +1492,74 @@ function App() {
                   )}
                 </div>
                 <div className="settings-block">
-                  <h3>Archiver et reprendre</h3>
+                  <h3>L’archive se met à jour toute seule</h3>
+                  <label className="toggle-row">
+                    <span>
+                      <strong>Archivage automatique</strong>
+                      <small>
+                        Après vos modifications, sans bouton à cliquer.
+                      </small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={autoSync}
+                      onChange={(e) => {
+                        setAutoSync(e.target.checked);
+                        localStorage.setItem(
+                          "nexus-auto-sync",
+                          String(e.target.checked),
+                        );
+                        retries.current = 0;
+                      }}
+                    />
+                  </label>
+                  <p className="sync-detail" role="status">
+                    {!online
+                      ? "Hors ligne : vos modifications sont gardées sur cet appareil."
+                      : connected
+                        ? cloudStatus
+                        : "Connectez Google pour activer l’archivage automatique."}
+                  </p>
+                  {conflict && (
+                    <p className="conflict-note">
+                      La version Drive et celle de cet appareil ont changé.
+                      Exportez votre copie locale, puis restaurez Drive ou
+                      choisissez « Envoyer ma version ».
+                    </p>
+                  )}
                   <p>
-                    La synchronisation envoie les données locales vers Drive.
-                    Pour changer d’appareil, restaurez d’abord l’archive. Évitez
-                    les modifications simultanées : cette version ne fusionne
-                    pas plusieurs utilisateurs.
+                    Chaque modification est envoyée après quelques secondes,
+                    pendant que l’application reste ouverte et Google connecté.
+                    En cas de coupure réseau, les données restent sur cet
+                    appareil et l’envoi reprend au retour de la connexion.
+                    Google peut demander une reconnexion lorsque l’autorisation
+                    expire.
                   </p>
                   <div className="actions">
                     <button
                       className="primary"
-                      disabled={!connected || busy}
+                      disabled={
+                        !connected ||
+                        busy ||
+                        cloudStatus === "Archivage en cours…"
+                      }
                       onClick={sync}
                     >
                       <Upload size={16} />
                       {busy
                         ? "Archivage en cours…"
-                        : "Tout archiver dans Drive"}
+                        : conflict
+                          ? "Envoyer ma version"
+                          : "Réessayer maintenant"}
                     </button>
                     <button
                       className="secondary"
-                      disabled={!connected || busy}
+                      disabled={
+                        !connected ||
+                        busy ||
+                        cloudStatus === "Archivage en cours…"
+                      }
                       onClick={() => {
                         if (
                           confirm(
@@ -1370,6 +1572,15 @@ function App() {
                               throw Error("Archive incompatible.");
                             await set("nexus-data", d);
                             setData(d);
+                            remoteSnapshot.current = d;
+                            setArchivedRevision(d.updated);
+                            localStorage.setItem(
+                              "nexus-archived-revision",
+                              String(d.updated),
+                            );
+                            retries.current = 0;
+                            setConflict(false);
+                            setCloudStatus("À jour sur Drive");
                             notify("Archive restaurée.");
                           });
                       }}
@@ -1379,10 +1590,10 @@ function App() {
                   </div>
                 </div>
                 <div className="settings-block">
-                  <h3>Les couleurs de la troupe</h3>
+                  <h3>Les logos de la troupe</h3>
                   <p>
-                    Ajoutez les fichiers des logos Nexus et Orion pour remplacer
-                    les marques provisoires de l’en-tête.
+                    Les logos Nexus et Orion sont intégrés dans l’en-tête. Vous
+                    pouvez aussi utiliser vos propres fichiers.
                   </p>
                   <div className="form-row">
                     {["nexus", "orion"].map((key) => (
@@ -1475,6 +1686,26 @@ function App() {
         </div>
       )}
     </>
+  );
+}
+function PatrolEmblem({ index, name }) {
+  return (
+    <span className="patrol-emblem">
+      {index === 0 ? (
+        <img
+          src="/branding/goelands.webp"
+          alt={`Emblème ${name}`}
+          className="single-emblem"
+        />
+      ) : (
+        <img
+          src="/branding/patrols.webp"
+          alt={`Emblème ${name}`}
+          className="emblem-sprite"
+          style={{ left: `${-(index - 1) * 100}%` }}
+        />
+      )}
+    </span>
   );
 }
 function Stat({ icon: Icon, value, label }) {
@@ -1692,46 +1923,111 @@ function ProgressForm({ title, entries, save }) {
   );
 }
 function CampGrid({ book, index, edits, change }) {
+  const [mode, setMode] = useState(
+    window.matchMedia("(max-width: 760px)").matches ? "mobile" : "sheet",
+  );
+  const [selectedRow, setSelectedRow] = useState(0);
   const name = book.SheetNames[index],
     sheet = book.Sheets[name];
   const range = XLSX.utils.decode_range(sheet["!ref"] || "A1");
   const rows = Math.min(200, Math.max(range.e.r + 8, 35));
+  const row = Math.min(selectedRow, rows - 1);
+  const value = (r, c) =>
+    edits[name]?.[XLSX.utils.encode_cell({ r, c })] ??
+    sheet[XLSX.utils.encode_cell({ r, c })]?.v ??
+    "";
   return (
-    <div className="sheet-wrap">
-      <table className="sheet">
-        <thead>
-          <tr>
-            <th />
-            <>
-              {Array.from({ length: 15 }, (_, c) => (
-                <th key={c}>{XLSX.utils.encode_col(c)}</th>
+    <>
+      <div className="camp-mode">
+        <button
+          className={mode === "mobile" ? "active" : ""}
+          onClick={() => setMode("mobile")}
+        >
+          Fiche mobile
+        </button>
+        <button
+          className={mode === "sheet" ? "active" : ""}
+          onClick={() => setMode("sheet")}
+        >
+          Tableur complet
+        </button>
+      </div>
+      {mode === "mobile" ? (
+        <div className="camp-mobile-rows">
+          <div className="camp-row">
+            <label>
+              Ligne du dossier
+              <select
+                aria-label="Ligne du dossier"
+                value={row}
+                onChange={(e) => setSelectedRow(Number(e.target.value))}
+              >
+                {Array.from({ length: rows }, (_, r) => (
+                  <option value={r} key={r}>
+                    Ligne {r + 1} ·{" "}
+                    {Array.from({ length: 15 }, (_, c) => value(r, c))
+                      .filter(Boolean)
+                      .join(" / ")
+                      .slice(0, 90) || "À compléter"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="hint">
+              Choisissez une ligne puis complétez ses champs. Toutes les lignes
+              du modèle sont disponibles.
+            </p>
+            {Array.from({ length: 15 }, (_, c) => {
+              const ref = XLSX.utils.encode_cell({ r: row, c });
+              return (
+                <label key={ref}>
+                  Champ {ref}
+                  <textarea
+                    rows={2}
+                    aria-label={`${name} ${ref}`}
+                    value={value(row, c)}
+                    onChange={(e) => change(name, ref, e.target.value)}
+                  />
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="sheet-wrap">
+          <table className="sheet">
+            <thead>
+              <tr>
+                <th />
+                {Array.from({ length: 15 }, (_, c) => (
+                  <th key={c}>{XLSX.utils.encode_col(c)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: rows }, (_, r) => (
+                <tr key={r}>
+                  <th>{r + 1}</th>
+                  {Array.from({ length: 15 }, (_, c) => {
+                    const ref = XLSX.utils.encode_cell({ r, c });
+                    return (
+                      <td key={c}>
+                        <input
+                          aria-label={`${name} ${ref}`}
+                          title={String(value(r, c))}
+                          value={value(r, c)}
+                          onChange={(e) => change(name, ref, e.target.value)}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
               ))}
-            </>
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: rows }, (_, r) => (
-            <tr key={r}>
-              <th>{r + 1}</th>
-              {Array.from({ length: 15 }, (_, c) => {
-                const ref = XLSX.utils.encode_cell({ r, c });
-                const cell = sheet[ref];
-                return (
-                  <td key={c}>
-                    <input
-                      aria-label={`${name} ${ref}`}
-                      title={String(edits[name]?.[ref] ?? cell?.v ?? "")}
-                      value={edits[name]?.[ref] ?? cell?.v ?? ""}
-                      onChange={(e) => change(name, ref, e.target.value)}
-                    />
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }
 createRoot(document.getElementById("root")).render(<App />);

@@ -93,6 +93,28 @@ test("Drive archive creates six independent Sheets pairs, Docs reports, photos a
       1,
     );
     assert.deepEqual(await restore(), d);
+    const before = files.length;
+    await assert.rejects(
+      () =>
+        sync(d, async () => new Blob(["test"]), {
+          expectedRevision: d.updated + 1,
+        }),
+      (e) => e.code === "CONFLICT",
+    );
+    assert.equal(
+      files.length,
+      before,
+      "conflicting archive must not upload any files",
+    );
+    await sync(d, async () => new Blob(["test"]), {
+      expectedRevision: d.updated,
+      previous: d,
+    });
+    assert.equal(
+      files.length,
+      before + 1,
+      "unchanged patrols must not re-upload workbooks, reports or photos",
+    );
     disconnect();
     await assert.rejects(() => restore(), /Connectez/);
   } finally {
