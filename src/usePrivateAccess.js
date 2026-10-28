@@ -1,10 +1,12 @@
+import { returnContextKey, loginReturnError } from "./auth-context.js";
 import { useEffect, useRef, useState } from "react";
 import { accessClient, privatePayload } from "./access";
-export default function usePrivateAccess(patrol, onRemote) {
+export default function usePrivateAccess(patrol, onRemote, section) {
   const [user, setUser] = useState(null),
     [allowed, setAllowed] = useState([]),
     [loading, setLoading] = useState(Boolean(accessClient)),
-    [status, setStatus] = useState("");
+    [status, setStatus] = useState(""),
+    [authError, setAuthError] = useState(loginReturnError);
   const revisions = useRef(new Map()),
     pending = useRef(new Map()),
     writing = useRef(false),
@@ -12,15 +14,27 @@ export default function usePrivateAccess(patrol, onRemote) {
   handler.current = onRemote;
   useEffect(() => {
     if (!accessClient) return;
-    accessClient.auth.getSession().then(({ data, error }) => {
-      if (error) setStatus(error.message);
-      setUser(data.session?.user || null);
-      setLoading(false);
-    });
+    let active = true;
+    accessClient.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) setAuthError(error.message);
+        setUser(data.session?.user || null);
+      })
+      .catch((e) => {
+        if (active) setAuthError(e.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     const { data } = accessClient.auth.onAuthStateChange((_event, session) =>
       setUser(session?.user || null),
     );
-    return () => data.subscription.unsubscribe();
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
   }, []);
   useEffect(() => {
     let active = true;
@@ -67,7 +81,7 @@ export default function usePrivateAccess(patrol, onRemote) {
     return () => {
       active = false;
     };
-  }, [user?.id, patrol]);
+  }, [user?.id, user?.email, patrol]);
   async function save(p) {
     if (!accessClient || !allowed.includes(patrol) || loading) return;
     pending.current.set(patrol, privatePayload(p));
@@ -115,21 +129,26 @@ export default function usePrivateAccess(patrol, onRemote) {
     allowed,
     loading,
     status,
-    authorized: allowed.includes(patrol),
+    authorized: Boolean(user) && allowed.includes(patrol),
     save,
-    sendCode: async (email) => {
-      const { error } = await accessClient.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
+    authError,
+    signInGoogle: async () => {
+      setAuthError("");
+      sessionStorage.setItem(
+        returnContextKey,
+        JSON.stringify({ patrol, section }),
+      );
+      const { error } = await accessClient.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin + "/",
+          queryParams: { prompt: "select_account" },
+        },
       });
-      if (error) throw error;
-    },
-    verify: async (email, token) => {
-      const { error } = await accessClient.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: token.trim(),
-        type: "email",
-      });
-      if (error) throw error;
+      if (error) {
+        sessionStorage.removeItem(returnContextKey);
+        throw error;
+      }
     },
     signOut: () => accessClient.auth.signOut(),
   };

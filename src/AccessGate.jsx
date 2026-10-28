@@ -1,19 +1,15 @@
 import React, { useState } from "react";
-import { Shield, Mail } from "lucide-react";
+import { Shield } from "lucide-react";
 export default function AccessGate({ access, patrol, children }) {
-  const [email, setEmail] = useState(""),
-    [code, setCode] = useState(""),
-    [sent, setSent] = useState(false),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  async function run(fn) {
+  async function signIn() {
     setBusy(true);
     setError("");
     try {
-      await fn();
+      await access.signInGoogle();
     } catch (e) {
       setError(e.message);
-    } finally {
       setBusy(false);
     }
   }
@@ -23,9 +19,8 @@ export default function AccessGate({ access, patrol, children }) {
         <div className="access-setup-note">
           <Shield size={20} />
           <p>
-            Protection par e-mail en attente de configuration Supabase et des
-            adresses de patrouille. Elle n’est pas encore active ; cet espace
-            reste local.
+            Protection en attente de configuration Supabase. Elle n’est pas
+            encore active ; cet espace reste local.
           </p>
         </div>
         {children}
@@ -38,7 +33,7 @@ export default function AccessGate({ access, patrol, children }) {
         <h3>Vérification de l’accès…</h3>
       </div>
     );
-  if (access.authorized)
+  if (access.user && access.authorized)
     return (
       <>
         <div className="access-session">
@@ -72,67 +67,44 @@ export default function AccessGate({ access, patrol, children }) {
           </button>
         </>
       ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(async () => {
-              if (sent) await access.verify(email, code);
-              else {
-                await access.sendCode(email);
-                setSent(true);
-              }
-            });
-          }}
-        >
-          <label>
-            Adresse e-mail
-            <input
-              type="email"
-              required
-              value={email}
-              disabled={sent}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
-          {sent && (
-            <label>
-              Code reçu par e-mail
-              <input
-                name="code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
+        <>
+          <button
+            type="button"
+            className="primary google-signin"
+            disabled={busy}
+            onClick={signIn}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#4285F4"
+                d="M21.6 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.4Z"
               />
-            </label>
-          )}
-          <button className="primary" disabled={busy}>
-            <Mail size={16} />
-            {busy
-              ? "Veuillez patienter…"
-              : sent
-                ? "Valider le code"
-                : "Recevoir mon code"}
+              <path
+                fill="#34A853"
+                d="M12 22c2.7 0 5-.9 6.6-2.4L15.4 17c-.9.6-2 1-3.4 1-2.6 0-4.8-1.7-5.6-4H3.1v2.6A10 10 0 0 0 12 22Z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M6.4 14a6 6 0 0 1 0-4V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14Z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 6c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.5 9.5 0 0 0 12 2a10 10 0 0 0-8.9 5.4L6.4 10c.8-2.3 3-4 5.6-4Z"
+              />
+            </svg>
+            {busy ? "Opening Google…" : "Continue with Google"}
           </button>
-          {sent && (
-            <button
-              type="button"
-              className="text-btn"
-              onClick={() => {
-                setSent(false);
-                setCode("");
-              }}
-            >
-              Modifier l’adresse / renvoyer
-            </button>
-          )}
-        </form>
+          <p className="hint">
+            Session mémorisée sur cet appareil. Aucun code e-mail à recevoir.
+          </p>
+        </>
       )}
-      {error && <p role="alert">{error}</p>}
+      {(error || access.authError) && (
+        <p role="alert">{error || access.authError}</p>
+      )}
       <small>
-        Cette connexion protège les données ; elle ne demande aucun accès à
-        Google Drive.
+        Cette connexion vérifie uniquement votre identité. Elle ne demande aucun
+        accès à Google Drive.
       </small>
     </section>
   );

@@ -1,26 +1,21 @@
-# Protection de la trésorerie et du secrétariat
+# Private treasury and secretariat
 
-Cette configuration n'utilise pas Google Drive. Elle utilise un code e-mail Supabase, une session mémorisée et des règles d'accès côté base de données (RLS).
+The application uses **Google sign-in through Supabase**, with a persisted, refreshed session. No email sender, SMTP, Resend or Google Drive authorization is used.
 
-## Activation requise
+See [ETAPES.md](ETAPES.md) for the current setup status and remaining connection steps. The two confirmed leaders and six patrol addresses are seeded by [setup.sql](setup.sql), exactly three authorized addresses per patrol.
 
-1. Créer un projet Supabase. Dans Authentication → Providers → Email, activer la connexion par e-mail. Dans Authentication → Email Templates, adapter **Confirm signup** et **Magic Link** pour afficher le code `{{ .Token }}` (le texte peut dire « Votre code Nexus : {{ .Token }} »). Configurer l'envoi des e-mails/SMTP pour la production et les utilisateurs prévus ; le service d'essai peut limiter les destinataires et le débit.
-2. Exécuter `setup.sql` dans SQL Editor. Les deux maîtrises confirmées sont déjà prévues : `gsvnsdl2006@gmail.com` et `troupeoriongsvn@gmail.com`.
-3. Les six adresses de patrouille sont déjà enregistrées dans le SQL avec les deux maîtrises : exactement trois autorisations par patrouille. Vérifier les noms/adresses avant d’exécuter le fichier. Les clients ne peuvent pas modifier cette liste.
-4. Dans Netlify → Environment variables, ajouter `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY` (clé publique publishable ou anon). Ne jamais utiliser de clé secret ou service_role dans une variable `VITE_*`.
-5. Relancer le déploiement Netlify. Les variables sont intégrées à la compilation.
-6. Tester avec une maîtrise, l'adresse d'une patrouille et une adresse non autorisée. Vérifier aussi directement les requêtes REST : une adresse non autorisée ne doit recevoir aucune ligne protégée.
+## Security and data
 
-Les instructions SQL ne sont pas appliquées par le simple déploiement GitHub. Tant que les variables ne sont pas configurées, l'application affiche explicitement que la restriction n'est pas active et reste en mode local. Ne pas présenter cette phase comme un espace privé opérationnel.
+Google credentials belong only in Supabase's Google provider settings. Frontend configuration contains only the Project URL and public Publishable/anon key. No secret/service_role key is used by the app.
 
-## Données et limites
+The frontend uses the OAuth authorization-code flow with PKCE. Supabase consumes the callback code, remembers the session, and refreshes it. Only basic Google identity scopes are used; no Drive permissions are requested. The login callback restores the patrol/section selected before sign-in. A cancelled login returns to a retry screen instead of leaving a disabled button.
 
-Une fois configurées, les deux sections sont bloquées aux visiteurs non authentifiés. Après connexion, Supabase charge uniquement les lignes autorisées par RLS. Les modifications des membres, réunions, présences, camps et transactions sont copiées dans `patrol_records`, avec une révision pour refuser les écrasements concurrents. La progression reste locale et ne demande pas de connexion.
+Database row-level security (RLS) checks the authenticated email against `patrol_access`. Clients cannot edit this allowlist. An unapproved authenticated account still cannot read or write `patrol_records`. Google identity verification does not replace these database policies.
 
-La première sauvegarde d'un espace distant encore vide importe la copie locale de la patrouille. Les trois dernières copies locales différentes sont conservées automatiquement avant le chargement de données distantes. La plus récente est téléchargeable dans Archives & exports de la patrouille (« Télécharger la copie locale avant connexion »). Exporter aussi une sauvegarde JSON complète avant la mise en service. Un appareil qui possédait déjà les anciennes données les conserve : cette nouvelle connexion ne chiffre ni n'efface les anciennes copies locales, téléchargements ou archives Drive. Les exports manuels et sauvegardes JSON peuvent contenir des données privées ; ils restent sous le contrôle de leur détenteur.
+Treasury/secretariat updates use revision checks to avoid overwriting another user's remote changes. Local copies are retained before loading differing private data, with the latest recovery copy downloadable from Archives & exports. Existing local copies and files are not encrypted or revoked by adding authentication. Progression remains local and does not require login.
 
-Aucun test d'intégration contre un vrai projet Supabase n'a été effectué sans URL/clé et configuration d'envoi e-mail. Les politiques RLS doivent être appliquées et vérifiées avant d'annoncer que la restriction est active.
+## Tests and activation
 
-## Tests locaux
+`npx playwright test --config playwright.access.config.js` tests the Google redirect, PKCE code exchange, remembered session, selected-patrol return, disallowed accounts, cross-patrol restrictions and cancelled login using a simulated Supabase server.
 
-`npx playwright test --config playwright.access.config.js` vérifie les écrans avec un serveur Supabase simulé : connexion vérifiée sans autorisation refusée, et compte de patrouille limité à sa patrouille. Cela ne remplace pas la vérification des règles RLS sur le vrai projet.
+These tests do not prove that the live Google/Supabase provider or RLS settings have been applied. Live validation requires the public project configuration, the Google provider already configured by the owner, the app URL on Supabase's redirect allowlist, and a deployed build.

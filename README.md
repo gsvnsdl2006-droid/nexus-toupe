@@ -27,11 +27,11 @@ Chaque membre peut recevoir une photo. Chaque badge/étape peut recevoir une ima
 
 ## Restriction par e-mail — activation à terminer
 
-La connexion par code e-mail Supabase est distincte de Google Drive et mémorise la session. Les règles RLS protègent les données distantes de trésorerie/secrétariat. Voir [supabase/README.md](supabase/README.md) et exécuter [supabase/setup.sql](supabase/setup.sql).
+La connexion Google via Supabase vérifie l’adresse et mémorise la session. Elle est distincte de Google Drive : aucun code e-mail, SMTP, Resend ou accès Drive n’est nécessaire. Les règles RLS protègent les données distantes de trésorerie/secrétariat. Voir [supabase/README.md](supabase/README.md) et exécuter [supabase/setup.sql](supabase/setup.sql).
 
-Les deux maîtrises confirmées sont prévues dans le SQL : `gsvnsdl2006@gmail.com` et `troupeoriongsvn@gmail.com`. Les six adresses de patrouille confirmées sont également dans le SQL. Il reste à ajouter la configuration publique du projet Supabase (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`). Aucune clé secret/service_role ne doit apparaître dans le frontend.
+Les deux maîtrises confirmées sont prévues dans le SQL : `gsvnsdl2006@gmail.com` et `troupeoriongsvn@gmail.com`. Les six adresses de patrouille confirmées sont également dans le SQL. Il reste à ajouter la configuration publique du projet Supabase (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, ou les identifiants publics dans `src/project-config.js`). Aucune clé secret/service_role ne doit apparaître dans le frontend.
 
-**Sans cette configuration, la restriction n'est pas active.** Un message l'indique dans les deux sections ; l'application conserve le mode local. Une fois configurée, une connexion vérifiée et une entrée d'accès côté base sont nécessaires : saisir simplement une adresse ne donne pas accès. Les clients ne peuvent pas modifier les autorisations. Les anciennes copies locales et exports ne sont pas chiffrés ou effacés par la nouvelle protection. La progression reste locale sans connexion.
+**Sans cette configuration, la restriction n'est pas active.** Un message l'indique dans les deux sections ; l'application conserve le mode local. Une fois configurée, une connexion Google vérifiée et une entrée d'accès côté base sont nécessaires : saisir simplement une adresse ne donne pas accès. Les clients ne peuvent pas modifier les autorisations. Les anciennes copies locales et exports ne sont pas chiffrés ou effacés par la nouvelle protection. La progression reste locale sans connexion.
 
 ## Validation
 

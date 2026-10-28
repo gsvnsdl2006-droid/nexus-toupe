@@ -1,13 +1,13 @@
 import { test, expect } from "@playwright/test";
 async function mock(page, allowed) {
-  let email = "";
+  const email = "test@example.com";
   const user = () => ({
     id: "11111111-1111-4111-8111-111111111111",
     aud: "authenticated",
     role: "authenticated",
     email,
     email_confirmed_at: "2026-10-28T00:00:00Z",
-    app_metadata: { provider: "email", providers: ["email"] },
+    app_metadata: { provider: "google", providers: ["google"] },
     user_metadata: {},
     created_at: "2026-10-28T00:00:00Z",
   });
@@ -22,11 +22,24 @@ async function mock(page, allowed) {
           contentType: "application/json",
           body: JSON.stringify(body),
         });
-      if (url.includes("/auth/v1/otp")) {
-        email = r.postDataJSON().email;
-        return json({});
+      if (url.includes("/auth/v1/authorize")) {
+        const parsed = new URL(url);
+        expect(parsed.searchParams.get("provider")).toBe("google");
+        expect(parsed.searchParams.get("redirect_to")).toBe(
+          "http://127.0.0.1:5176/",
+        );
+        expect(parsed.searchParams.get("code_challenge_method")).toBe("s256");
+        expect(parsed.searchParams.get("scopes") || "").not.toContain("drive");
+        return route.fulfill({
+          status: 302,
+          headers: { location: "http://127.0.0.1:5176/?code=test-google-code" },
+          body: "",
+        });
       }
-      if (url.includes("/auth/v1/verify")) {
+      if (url.includes("/auth/v1/token")) {
+        expect(new URL(url).searchParams.get("grant_type")).toBe("pkce");
+        expect(r.postDataJSON().auth_code).toBe("test-google-code");
+        expect(r.postDataJSON().code_verifier.length).toBeGreaterThan(40);
         const header = Buffer.from(
             JSON.stringify({ alg: "HS256", typ: "JWT" }),
           ).toString("base64url"),
@@ -91,16 +104,7 @@ for (const allowed of [[], ["Lions"]])
       page.getByRole("button", { name: "Opération", exact: true }),
     ).toHaveCount(0);
     await page
-      .getByLabel("Adresse e-mail", { exact: true })
-      .fill("test@example.com");
-    await page
-      .getByRole("button", { name: "Recevoir mon code", exact: true })
-      .click();
-    await page
-      .getByLabel("Code reçu par e-mail", { exact: true })
-      .fill("123456");
-    await page
-      .getByRole("button", { name: "Valider le code", exact: true })
+      .getByRole("button", { name: "Continue with Google", exact: true })
       .click();
     await expect(
       page.getByText(
@@ -122,6 +126,12 @@ for (const allowed of [[], ["Lions"]])
         page.getByRole("button", { name: "Opération", exact: true }),
       ).toBeVisible();
       await expect(page.locator("tbody")).toContainText("Cotisation privée");
+      await page.reload();
+      await page.getByRole("button", { name: /PATROUILLE 02/ }).click();
+      await page
+        .getByRole("button", { name: "Trésorier", exact: true })
+        .click();
+      await expect(page.locator("tbody")).toContainText("Cotisation privée");
       await page
         .getByRole("button", { name: "Toutes les patrouilles" })
         .click();
@@ -134,3 +144,33 @@ for (const allowed of [[], ["Lions"]])
       ).toBeVisible();
     }
   });
+
+test("a cancelled Google sign-in returns to the selected patrol with a retry button", async ({
+  page,
+}) => {
+  await page.route(
+    "https://nexus-access-test.supabase.co/auth/v1/authorize**",
+    (route) =>
+      route.fulfill({
+        status: 302,
+        headers: {
+          location:
+            "http://127.0.0.1:5176/?error=access_denied&error_description=Sign-in%20cancelled",
+        },
+        body: "",
+      }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: /PATROUILLE 02/ }).click();
+  await page.getByRole("button", { name: "Secrétariat", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Continue with Google", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Accès réservé · Lions" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Continue with Google", exact: true }),
+  ).toBeEnabled();
+  await expect(page.getByRole("alert")).toContainText("cancelled");
+});

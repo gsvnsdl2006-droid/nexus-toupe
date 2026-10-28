@@ -1,3 +1,4 @@
+import { readLoginReturn } from "./auth-context";
 import AccessGate from "./AccessGate";
 import usePrivateAccess from "./usePrivateAccess";
 import { privatePayload } from "./access";
@@ -73,10 +74,11 @@ const readFile = (file) =>
     r.onerror = reject;
     r.readAsDataURL(file);
   });
+const loginReturn = readLoginReturn();
 function App() {
   const [data, setData] = useState(null),
-    [patrol, selectPatrol] = useState(null),
-    [section, setSection] = useState("overview"),
+    [patrol, selectPatrol] = useState(loginReturn.patrol || null),
+    [section, setSection] = useState(loginReturn.section || "overview"),
     [tab, setTab] = useState("Réunions"),
     [modal, setModal] = useState(null),
     [notice, setNotice] = useState(""),
@@ -87,28 +89,32 @@ function App() {
     [activity, setActivity] = useState(activities[0]);
   const dataRef = useRef(data);
   dataRef.current = data;
-  const access = usePrivateAccess(patrol, async (payload) => {
-    const current = dataRef.current;
-    if (!current) return;
-    const previous = privatePayload(current.patrols[patrol]);
-    if (JSON.stringify(previous) !== JSON.stringify(payload)) {
-      const key = `nexus-private-backup-${patrol}`;
-      const history = (await get(key)) || [];
-      await set(
-        key,
-        [{ date: Date.now(), payload: previous }, ...history].slice(0, 3),
-      );
-    }
-    setData((latest) => {
-      if (!latest) return latest;
-      const next = structuredClone(latest);
-      Object.assign(next.patrols[patrol], payload);
-      set("nexus-data", next).catch(() =>
-        notify("Impossible de sauvegarder la copie locale."),
-      );
-      return next;
-    });
-  });
+  const access = usePrivateAccess(
+    patrol,
+    async (payload) => {
+      const current = dataRef.current;
+      if (!current) return;
+      const previous = privatePayload(current.patrols[patrol]);
+      if (JSON.stringify(previous) !== JSON.stringify(payload)) {
+        const key = `nexus-private-backup-${patrol}`;
+        const history = (await get(key)) || [];
+        await set(
+          key,
+          [{ date: Date.now(), payload: previous }, ...history].slice(0, 3),
+        );
+      }
+      setData((latest) => {
+        if (!latest) return latest;
+        const next = structuredClone(latest);
+        Object.assign(next.patrols[patrol], payload);
+        set("nexus-data", next).catch(() =>
+          notify("Impossible de sauvegarder la copie locale."),
+        );
+        return next;
+      });
+    },
+    section,
+  );
   useEffect(() => {
     sessionStorage.removeItem("nexus-drive-session");
     get("nexus-data")
