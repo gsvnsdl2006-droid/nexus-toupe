@@ -1,5 +1,27 @@
 let token;
 let expiresAt = 0;
+const sessionKey = "nexus-drive-session";
+function clearSession() {
+  token = null;
+  try {
+    globalThis.sessionStorage?.removeItem(sessionKey);
+  } catch {}
+}
+export function resumeSession() {
+  try {
+    const session = JSON.parse(
+      globalThis.sessionStorage?.getItem(sessionKey) || "null",
+    );
+    if (session?.token && session.expiresAt > Date.now() + 30000) {
+      token = session.token;
+      expiresAt = session.expiresAt;
+      return true;
+    }
+  } catch {}
+  clearSession();
+  return false;
+}
+
 export class DriveError extends Error {
   constructor(message, code) {
     super(message);
@@ -30,6 +52,12 @@ export async function connect(clientId) {
         callback: (r) => {
           if (r.access_token) {
             expiresAt = Date.now() + Number(r.expires_in || 3600) * 1000;
+            try {
+              globalThis.sessionStorage?.setItem(
+                sessionKey,
+                JSON.stringify({ token: r.access_token, expiresAt }),
+              );
+            } catch {}
             resolve(r.access_token);
           } else reject(Error(r.error_description || r.error));
         },
@@ -39,8 +67,8 @@ export async function connect(clientId) {
   );
 }
 export function disconnect() {
-  if (token) window.google.accounts.oauth2.revoke(token, () => {});
-  token = null;
+  if (token) window.google?.accounts?.oauth2?.revoke?.(token, () => {});
+  clearSession();
 }
 async function request(url, options = {}) {
   if (!token || Date.now() >= expiresAt)
@@ -53,7 +81,7 @@ async function request(url, options = {}) {
     headers: { Authorization: `Bearer ${token}`, ...options.headers },
   });
   if (r.status === 401) {
-    token = null;
+    clearSession();
     throw new DriveError(
       "Votre connexion Google a expiré. Reconnectez-vous pour reprendre l’archivage automatique.",
       "AUTH",
@@ -137,6 +165,32 @@ export async function sync(data, workbook, options = {}) {
         dir,
         await workbook("camp", name),
         "application/vnd.google-apps.spreadsheet",
+      );
+    if (p.camps?.length) {
+      const campsDir = await folder("Dossiers de camp", dir);
+      for (const camp of p.camps) {
+        if (
+          same(
+            camp,
+            old?.camps?.find((c) => c.id === camp.id),
+          )
+        )
+          continue;
+        const campDir = await folder(`${camp.title} [${camp.id}]`, campsDir);
+        await put(
+          `Dossier de camp ${camp.title}.xlsx`,
+          campDir,
+          await workbook("camp-form", name, camp),
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        );
+      }
+    }
+    if (!same(p.members, old?.members))
+      await put(
+        `Membres ${name}.json`,
+        dir,
+        new Blob([JSON.stringify(p.members)], { type: "application/json" }),
+        "application/json",
       );
     const meetings = await folder("Réunions", dir);
     for (const m of p.meetings) {

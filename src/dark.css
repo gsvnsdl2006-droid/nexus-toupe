@@ -1662,3 +1662,434 @@ input[type="file"] {
     bottom: -20px;
   }
 }
+.drive-toolbar {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border: 1px solid #38543c;
+  background: #153321;
+  border-radius: 12px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.drive-toolbar > span {
+  font-size: 11px;
+  color: #a8be9a;
+}
+.inline-save-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #c4dcb0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.inline-save-status > svg {
+  flex-shrink: 0;
+}
+.inline-save-status > span {
+  flex: 1;
+  min-width: 140px;
+}
+.inline-save-status .secondary {
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 11px;
+}
+.modal > .inline-save-status {
+  border: 1px solid #486442;
+  border-radius: 10px;
+  background: #1c3925;
+  padding: 12px;
+  margin: 15px 0;
+}
+.camp-create,
+.camp-form {
+  padding: 24px;
+  border: 1px solid #3f5a40;
+  background: #163120;
+  border-radius: 14px;
+  margin: 20px 0;
+}
+.camp-create label {
+  margin-top: 0;
+}
+.camp-folders {
+  display: grid;
+  gap: 14px;
+  margin: 22px 0;
+}
+.camp-folder {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--accent-line);
+  background: var(--accent-bg);
+  border-radius: 12px;
+  padding: 22px;
+  color: var(--accent);
+}
+.camp-folder > div {
+  flex: 1;
+}
+.camp-folder h3 {
+  font-size: 18px;
+  margin: 0 0 9px;
+  color: #e3edda;
+}
+.camp-folder small {
+  font-size: 12px;
+  color: #b7caa8;
+}
+.camp-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 15px 0 20px;
+}
+.camp-heading h3 {
+  font-size: 22px;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.camp-categories {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin: 24px 0 40px;
+}
+.camp-categories > button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  text-align: left;
+  background: #173522;
+  border: 1px solid #426040;
+  border-radius: 12px;
+  padding: 22px;
+  min-height: 160px;
+}
+.camp-categories > button:hover {
+  border-color: var(--accent);
+}
+.camp-categories > button > span {
+  font-size: 26px;
+  margin-bottom: 12px;
+}
+.camp-categories h3 {
+  font-size: 15px;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.camp-categories small {
+  font-size: 11px;
+  color: #aec39c;
+}
+.camp-categories svg {
+  position: absolute;
+  right: 15px;
+  top: 20px;
+  color: var(--accent);
+}
+.camp-form {
+  max-width: 800px;
+}
+.camp-form > .back {
+  padding-top: 0;
+}
+.camp-form > h3 {
+  font-size: 23px;
+  margin: 12px 0 25px;
+}
+.camp-save {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin: 25px 0 15px;
+}
+.camp-save > span {
+  font-size: 12px;
+  color: #b1c89e;
+}
+.legacy-camp {
+  padding: 20px;
+  background: #223729;
+  border: 1px solid #4c6247;
+  border-radius: 12px;
+  margin: 30px 0;
+}
+.legacy-camp p {
+  font-size: 12px;
+  color: #b7c8ac;
+  line-height: 1.7;
+  margin: 10px 0 15px;
+}
+.attendance-overview {
+  margin: 25px 0 40px;
+}
+.patrol-attendance-bars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.attendance-bar,
+.member-attendance-charts > article {
+  padding: 20px;
+  border: 1px solid #38553a;
+  background: #142e1f;
+  border-radius: 12px;
+  min-width: 0;
+}
+.attendance-bar > div:first-child,
+.member-chart-title {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.attendance-bar > div > span {
+  font-size: 11px;
+  color: var(--accent);
+}
+.chart-track {
+  height: 10px;
+  border-radius: 20px;
+  background: #304b33;
+  margin: 15px 0 12px;
+  overflow: hidden;
+}
+.chart-track i {
+  display: block;
+  background: var(--accent);
+  height: 100%;
+  border-radius: 20px;
+  transition: width 0.4s;
+}
+.attendance-bar > small {
+  font-size: 10px;
+  line-height: 1.7;
+  color: #a5bc97;
+  display: block;
+}
+.attendance-summary {
+  display: flex;
+  gap: 26px;
+  align-items: center;
+  padding: 25px;
+  background: #193623;
+  border: 1px solid #3f5d3f;
+  border-radius: 14px;
+  margin: 25px 0;
+}
+.attendance-summary h3 {
+  font-size: 20px;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.attendance-summary p {
+  font-size: 14px;
+  color: #c5d8b5;
+  margin: 0 0 12px;
+}
+.attendance-summary small {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #abc39b;
+  display: block;
+  max-width: 500px;
+}
+.attendance-ring {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+.attendance-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ring-track {
+  color: #36533a;
+}
+.attendance-ring strong {
+  font-size: 28px;
+  color: var(--accent);
+}
+.member-attendance-charts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin: 22px 0;
+}
+.member-chart-title strong {
+  overflow-wrap: anywhere;
+}
+.member-chart-title span {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.member-attendance-charts p {
+  font-size: 12px;
+  color: #bfd2ac;
+  margin: 0 0 7px;
+}
+.member-attendance-charts small {
+  font-size: 11px;
+  color: #9fb68e;
+}
+@media (max-width: 760px) {
+  .drive-toolbar {
+    padding: 12px;
+    margin-top: 14px;
+    display: block;
+  }
+  .drive-toolbar > span {
+    display: none;
+  }
+  .inline-save-status {
+    font-size: 11px;
+    gap: 8px;
+  }
+  .inline-save-status > span {
+    min-width: 110px;
+  }
+  .drive-toolbar .secondary {
+    min-height: 40px;
+    font-size: 10px;
+  }
+  .camp-create,
+  .camp-form {
+    padding: 19px 16px;
+    border-radius: 12px;
+  }
+  .camp-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .camp-heading h3 {
+    font-size: 21px;
+  }
+  .camp-categories {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 20px 0;
+  }
+  .camp-categories > button {
+    padding: 18px 14px;
+    min-height: 153px;
+  }
+  .camp-categories h3 {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 9px;
+  }
+  .camp-categories small {
+    font-size: 10px;
+  }
+  .camp-categories svg {
+    right: 10px;
+    top: 18px;
+  }
+  .camp-categories > button > span {
+    font-size: 24px;
+  }
+  .camp-form > h3 {
+    font-size: 21px;
+  }
+  .camp-save {
+    display: block;
+  }
+  .camp-save > .primary {
+    width: 100%;
+  }
+  .camp-save > span {
+    display: block;
+    font-size: 11px;
+    margin-top: 10px;
+  }
+  .camp-folder {
+    padding: 19px 16px;
+    gap: 12px;
+  }
+  .camp-folder h3 {
+    font-size: 16px;
+  }
+  .camp-folder small {
+    font-size: 11px;
+  }
+  .patrol-attendance-bars {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .attendance-overview {
+    margin: 25px 0 30px;
+  }
+  .attendance-bar {
+    padding: 16px 13px;
+  }
+  .attendance-bar > div:first-child {
+    display: block;
+    font-size: 13px;
+  }
+  .attendance-bar > div > span {
+    display: block;
+    font-size: 10px;
+    margin-top: 5px;
+  }
+  .attendance-bar > small {
+    font-size: 9px;
+  }
+  .chart-track {
+    height: 8px;
+  }
+  .attendance-summary {
+    gap: 15px;
+    padding: 20px 15px;
+    align-items: start;
+  }
+  .attendance-summary h3 {
+    font-size: 17px;
+  }
+  .attendance-summary p {
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .attendance-summary small {
+    font-size: 11px;
+  }
+  .attendance-ring {
+    height: 90px;
+    width: 90px;
+  }
+  .attendance-ring strong {
+    font-size: 23px;
+  }
+  .member-attendance-charts {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .member-attendance-charts > article {
+    padding: 20px;
+  }
+  .member-chart-title {
+    font-size: 15px;
+  }
+  .member-chart-title span {
+    font-size: 24px;
+  }
+}

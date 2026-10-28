@@ -22,7 +22,14 @@ export const initial = () => ({
   patrols: Object.fromEntries(
     patrols.map((p) => [
       p,
-      { members: [], transactions: [], meetings: [], camp: {}, progress: [] },
+      {
+        members: [],
+        transactions: [],
+        meetings: [],
+        camp: {},
+        camps: [],
+        progress: [],
+      },
     ]),
   ),
 });
@@ -55,7 +62,16 @@ export function validBackup(d) {
           Array.isArray(x[k]),
         ) &&
         x.camp &&
-        typeof x.camp === "object"
+        typeof x.camp === "object" &&
+        (!x.camps ||
+          (Array.isArray(x.camps) &&
+            x.camps.every(
+              (c) =>
+                typeof c.id === "string" &&
+                typeof c.title === "string" &&
+                c.fields &&
+                typeof c.fields === "object",
+            )))
       );
     })
   );

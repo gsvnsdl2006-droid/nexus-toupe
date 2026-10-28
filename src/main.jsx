@@ -1,3 +1,6 @@
+import CampEditor from "./CampEditor";
+import { campWorkbook, excelBlob } from "./camp";
+import { AttendanceOverview, MemberAttendance } from "./AttendanceCharts";
 import { slogans } from "./patrols.js";
 import "@fontsource-variable/dm-sans";
 import "@fontsource-variable/manrope";
@@ -60,9 +63,7 @@ function App() {
   const syncing = useRef(false);
   const remoteSnapshot = useRef(null);
   const retries = useRef(0);
-  const [autoSync, setAutoSync] = useState(
-    localStorage.getItem("nexus-auto-sync") !== "false",
-  );
+  const autoSync = true;
   const [archivedRevision, setArchivedRevision] = useState(
     Number(localStorage.getItem("nexus-archived-revision") || 0),
   );
@@ -88,8 +89,6 @@ function App() {
     [saveState, setSaveState] = useState("Enregistré sur cet appareil"),
     [member, setMember] = useState(""),
     [search, setSearch] = useState(""),
-    [campBook, setCampBook] = useState(null),
-    [campTab, setCampTab] = useState(0),
     [activity, setActivity] = useState(activities[0]);
   useEffect(() => {
     get("nexus-data")
@@ -103,9 +102,6 @@ function App() {
       .catch(() =>
         setNotice("Impossible de lire les données locales. Rechargez la page."),
       );
-    fetch("/templates/camp.xlsx")
-      .then((r) => r.arrayBuffer())
-      .then((b) => setCampBook(XLSX.read(b)));
   }, []);
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -130,7 +126,8 @@ function App() {
   function patch(fn) {
     update((d) => fn(d.patrols[patrol]));
   }
-  async function workbook(kind, name, snapshot = data) {
+  async function workbook(kind, name, snapshot = data, camp) {
+    if (kind === "camp-form") return excelBlob(campWorkbook(camp, name));
     const b = await (await fetch(`/templates/${kind}.xlsx`)).arrayBuffer();
     const wb = XLSX.read(b);
     const p = snapshot.patrols[name];
@@ -197,7 +194,7 @@ function App() {
     try {
       const stamp = await drive.sync(
         snapshot,
-        (kind, name) => workbook(kind, name, snapshot),
+        (kind, name, camp) => workbook(kind, name, snapshot, camp),
         force
           ? {}
           : {
@@ -245,9 +242,9 @@ function App() {
     if (conflict) setConflict(false);
     await archive(data, conflict);
   }
-  async function connectDrive() {
+  async function connectDrive(resume = false) {
     setConnected(false);
-    await drive.connect(client);
+    if (!resume) await drive.connect(client);
     // Read the existing archive before enabling uploads on a new device.
     const remote = await drive.readArchive();
     if (remote && !validBackup(remote))
@@ -262,7 +259,8 @@ function App() {
           !p.transactions.length &&
           !p.meetings.length &&
           !p.progress.length &&
-          !Object.keys(p.camp).length,
+          !Object.keys(p.camp).length &&
+          !p.camps?.length,
       ) && !data.branding;
     const alreadyArchived = data.updated === archivedRevision;
     if (
@@ -288,6 +286,51 @@ function App() {
       "Google connecté. Vos prochaines modifications seront archivées automatiquement.",
     );
   }
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (!data || resumed.current) return;
+    resumed.current = true;
+    if (drive.resumeSession()) run(() => connectDrive(true));
+  }, [data]);
+  function connectInline() {
+    if (client) run(() => connectDrive());
+    else setModal("settings");
+  }
+  const inlineSaveStatus = (
+    <div className="inline-save-status" role="status">
+      <Cloud size={17} />
+      <span>
+        {!online
+          ? "Enregistré sur cet appareil · envoi dès le retour du réseau"
+          : connected
+            ? data?.updated === archivedRevision
+              ? "Enregistré dans Google Drive"
+              : cloudStatus === "À jour sur Drive"
+                ? "Enregistrement Drive en attente…"
+                : cloudStatus
+            : "Enregistré sur cet appareil · Google Drive à connecter"}
+      </span>
+      {!connected && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy}
+          onClick={connectInline}
+        >
+          Connecter Drive
+        </button>
+      )}
+      {conflict && (
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => setModal("settings")}
+        >
+          Vérifier les versions
+        </button>
+      )}
+    </div>
+  );
   useEffect(() => {
     const refresh = () => {
       setOnline(navigator.onLine);
@@ -426,6 +469,10 @@ function App() {
         </div>
       </header>
       <main data-patrol={patrol ? patrols.indexOf(patrol) : undefined}>
+        <div className="drive-toolbar">
+          {inlineSaveStatus}
+          {connected && <span>Les ajouts sont envoyés automatiquement</span>}
+        </div>
         <div className="breadcrumb">
           <span>ESPACE TROUPE</span>
           <ChevronRight size={12} />
@@ -464,16 +511,14 @@ function App() {
                   <br className="desktop" /> notre troupe, réuni dans un seul
                   espace.
                 </p>
-                <button
+                <a
                   className="primary"
-                  onClick={() =>
-                    document
-                      .getElementById("patrols")
-                      .scrollIntoView({ behavior: "smooth" })
-                  }
+                  href="https://troupeoriongsvn.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  Retrouver ma patrouille <ArrowUpRight size={18} />
-                </button>
+                  Le site de la Troupe Orion <ArrowUpRight size={18} />
+                </a>
                 <div className="hero-caption">
                   <span className="little-stars">✦ ✦ ✦</span> Prêts à écrire la
                   suite ?
@@ -608,6 +653,7 @@ function App() {
                 })}
               </div>
             </section>
+            <AttendanceOverview patrols={data.patrols} />
             <section className="bottom-banner">
               <div className="banner-icon">
                 <Leaf />
@@ -953,6 +999,7 @@ function App() {
                         <Plus size={16} /> Membres
                       </button>
                     </div>
+                    <MemberAttendance patrol={p} />
                     <div className="table-wrap">
                       <table>
                         <thead>
@@ -1004,62 +1051,37 @@ function App() {
                   </>
                 )}
                 {tab === "Dossier de camp" && (
-                  <>
-                    <div className="section-heading">
-                      <div>
-                        <h2>Dossier de camp · {patrol}</h2>
-                        <p>
-                          Les 15 onglets de votre modèle SVP. Touchez une
-                          cellule pour la modifier.
-                        </p>
-                      </div>
-                      <button
-                        className="secondary"
-                        onClick={() =>
-                          run(async () =>
-                            download(
-                              await workbook("camp", patrol),
-                              `Dossier de camp ${patrol}.xlsx`,
-                            ),
-                          )
-                        }
-                      >
-                        <Download size={16} /> Excel
-                      </button>
-                    </div>
-                    {campBook && (
-                      <>
-                        <select
-                          className="camp-select"
-                          value={campTab}
-                          onChange={(e) => setCampTab(Number(e.target.value))}
-                        >
-                          {campBook.SheetNames.map((s, i) => (
-                            <option value={i} key={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
-                        <CampGrid
-                          book={campBook}
-                          index={campTab}
-                          edits={p.camp}
-                          change={(sheet, ref, value) =>
-                            patch((p) => {
-                              p.camp[sheet] ??= {};
-                              p.camp[sheet][ref] = value;
-                            })
-                          }
-                        />
-                        <p className="hint">
-                          Grille éditable A–O, jusqu’à 200 lignes. Les textes du
-                          modèle servent de référence ; ils ne sont pas des
-                          instructions de l’application. Le fichier original
-                          reste disponible dans les modèles.
-                        </p>
-                      </>
-                    )}
-                  </>
+                  <CampEditor
+                    key={patrol}
+                    patrol={patrol}
+                    camps={p.camps || []}
+                    legacy={p.camp}
+                    status={inlineSaveStatus}
+                    save={(camp) =>
+                      patch((p) => {
+                        p.camps ??= [];
+                        const index = p.camps.findIndex(
+                          (c) => c.id === camp.id,
+                        );
+                        if (index < 0) p.camps.push(camp);
+                        else p.camps[index] = camp;
+                      })
+                    }
+                    download={(camp) =>
+                      download(
+                        excelBlob(campWorkbook(camp, patrol)),
+                        `Dossier de camp ${camp.title}.xlsx`,
+                      )
+                    }
+                    downloadLegacy={() =>
+                      run(async () =>
+                        download(
+                          await workbook("camp", patrol),
+                          `Ancien dossier ${patrol}.xlsx`,
+                        ),
+                      )
+                    }
+                  />
                 )}
               </>
             )}
@@ -1213,6 +1235,7 @@ function App() {
               <>
                 <div className="eyebrow">LA FORCE DU COLLECTIF</div>
                 <h2>Les membres · {patrol}</h2>
+                {inlineSaveStatus}
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -1340,6 +1363,7 @@ function App() {
                 </form>
               </>
             )}
+            {modal.type === "meeting" && <>{inlineSaveStatus}</>}
             {modal.type === "meeting" && (
               <MeetingForm
                 meeting={modal.meeting}
@@ -1355,6 +1379,7 @@ function App() {
                 }}
               />
             )}
+            {modal.type === "progress" && <>{inlineSaveStatus}</>}
             {modal.type === "progress" && (
               <ProgressForm
                 title={
@@ -1493,27 +1518,16 @@ function App() {
                 </div>
                 <div className="settings-block">
                   <h3>L’archive se met à jour toute seule</h3>
-                  <label className="toggle-row">
+                  <div className="toggle-row">
                     <span>
-                      <strong>Archivage automatique</strong>
+                      <strong>Archivage automatique toujours actif</strong>
                       <small>
-                        Après vos modifications, sans bouton à cliquer.
+                        Les ajouts sont envoyés dès leur enregistrement. Aucune
+                        sauvegarde manuelle depuis les paramètres.
                       </small>
                     </span>
-                    <input
-                      type="checkbox"
-                      role="switch"
-                      checked={autoSync}
-                      onChange={(e) => {
-                        setAutoSync(e.target.checked);
-                        localStorage.setItem(
-                          "nexus-auto-sync",
-                          String(e.target.checked),
-                        );
-                        retries.current = 0;
-                      }}
-                    />
-                  </label>
+                    <Check size={24} />
+                  </div>
                   <p className="sync-detail" role="status">
                     {!online
                       ? "Hors ligne : vos modifications sont gardées sur cet appareil."
@@ -1919,114 +1933,6 @@ function ProgressForm({ title, entries, save }) {
           <Plus size={16} /> Ajouter une réalisation
         </button>
       </form>
-    </>
-  );
-}
-function CampGrid({ book, index, edits, change }) {
-  const [mode, setMode] = useState(
-    window.matchMedia("(max-width: 760px)").matches ? "mobile" : "sheet",
-  );
-  const [selectedRow, setSelectedRow] = useState(0);
-  const name = book.SheetNames[index],
-    sheet = book.Sheets[name];
-  const range = XLSX.utils.decode_range(sheet["!ref"] || "A1");
-  const rows = Math.min(200, Math.max(range.e.r + 8, 35));
-  const row = Math.min(selectedRow, rows - 1);
-  const value = (r, c) =>
-    edits[name]?.[XLSX.utils.encode_cell({ r, c })] ??
-    sheet[XLSX.utils.encode_cell({ r, c })]?.v ??
-    "";
-  return (
-    <>
-      <div className="camp-mode">
-        <button
-          className={mode === "mobile" ? "active" : ""}
-          onClick={() => setMode("mobile")}
-        >
-          Fiche mobile
-        </button>
-        <button
-          className={mode === "sheet" ? "active" : ""}
-          onClick={() => setMode("sheet")}
-        >
-          Tableur complet
-        </button>
-      </div>
-      {mode === "mobile" ? (
-        <div className="camp-mobile-rows">
-          <div className="camp-row">
-            <label>
-              Ligne du dossier
-              <select
-                aria-label="Ligne du dossier"
-                value={row}
-                onChange={(e) => setSelectedRow(Number(e.target.value))}
-              >
-                {Array.from({ length: rows }, (_, r) => (
-                  <option value={r} key={r}>
-                    Ligne {r + 1} ·{" "}
-                    {Array.from({ length: 15 }, (_, c) => value(r, c))
-                      .filter(Boolean)
-                      .join(" / ")
-                      .slice(0, 90) || "À compléter"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p className="hint">
-              Choisissez une ligne puis complétez ses champs. Toutes les lignes
-              du modèle sont disponibles.
-            </p>
-            {Array.from({ length: 15 }, (_, c) => {
-              const ref = XLSX.utils.encode_cell({ r: row, c });
-              return (
-                <label key={ref}>
-                  Champ {ref}
-                  <textarea
-                    rows={2}
-                    aria-label={`${name} ${ref}`}
-                    value={value(row, c)}
-                    onChange={(e) => change(name, ref, e.target.value)}
-                  />
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="sheet-wrap">
-          <table className="sheet">
-            <thead>
-              <tr>
-                <th />
-                {Array.from({ length: 15 }, (_, c) => (
-                  <th key={c}>{XLSX.utils.encode_col(c)}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: rows }, (_, r) => (
-                <tr key={r}>
-                  <th>{r + 1}</th>
-                  {Array.from({ length: 15 }, (_, c) => {
-                    const ref = XLSX.utils.encode_cell({ r, c });
-                    return (
-                      <td key={c}>
-                        <input
-                          aria-label={`${name} ${ref}`}
-                          title={String(value(r, c))}
-                          value={value(r, c)}
-                          onChange={(e) => change(name, ref, e.target.value)}
-                        />
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </>
   );
 }

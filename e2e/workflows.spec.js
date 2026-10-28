@@ -29,6 +29,13 @@ test("patrol workflows persist and remain isolated", async ({ page }) => {
     .click();
   await page.getByRole("button", { name: "Présences & statistiques" }).click();
   await expect(page.locator("tbody")).toContainText("100 %");
+  await expect(page.locator(".attendance-ring")).toHaveAttribute(
+    "aria-label",
+    "100 % de présence dans la patrouille",
+  );
+  await expect(page.locator(".member-attendance-charts")).toContainText(
+    "Marc Test",
+  );
   await page.getByRole("button", { name: "Progression", exact: true }).click();
   await page
     .getByLabel("Membre", { exact: true })
@@ -61,14 +68,31 @@ test("patrol workflows persist and remain isolated", async ({ page }) => {
   await page
     .getByRole("button", { name: "Dossier de camp", exact: true })
     .click();
-  await page.locator(".camp-select").selectOption("4");
-  const field = page.getByLabel("5-Objectifs A10", { exact: true });
-  await field.fill("Autonomie de la patrouille");
+  await page
+    .getByRole("button", { name: "Nouveau dossier", exact: true })
+    .click();
+  await page.getByLabel("Nom du dossier", { exact: true }).fill("Camp de Noël");
+  await page
+    .getByRole("button", { name: "Créer le dossier", exact: true })
+    .click();
+  await page
+    .locator(".camp-categories button")
+    .filter({ hasText: "Objectifs" })
+    .click();
+  await page
+    .getByLabel("Nos objectifs", { exact: true })
+    .fill("Autonomie de la patrouille");
+  await page
+    .getByRole("button", { name: "Enregistrer la catégorie", exact: true })
+    .click();
   const downloaded = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Excel", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Télécharger Excel", exact: true })
+    .click();
   const file = await downloaded;
   const wb = XLSX.read(await readFile(await file.path()));
-  expect(wb.Sheets["5-Objectifs"].A10.v).toBe("Autonomie de la patrouille");
+  expect(wb.Sheets["Objectifs"].B7.v).toBe("Autonomie de la patrouille");
+  expect(wb.SheetNames).toHaveLength(10);
   await page.getByRole("button", { name: "Toutes les patrouilles" }).click();
   await page.getByRole("button", { name: /PATROUILLE 02/ }).click();
   await expect(page.locator(".patrol-title")).toContainText("0");
@@ -101,14 +125,23 @@ test("mobile landing and patrol navigation fit the viewport", async ({
   await page
     .getByRole("button", { name: "Dossier de camp", exact: true })
     .click();
-  await expect(
-    page.getByRole("button", { name: "Fiche mobile", exact: true }),
-  ).toHaveClass("active");
-  await page.locator(".camp-select").selectOption("4");
-  await page.getByLabel("Ligne du dossier", { exact: true }).selectOption("9");
   await page
-    .getByLabel("5-Objectifs A10", { exact: true })
+    .getByRole("button", { name: "Nouveau dossier", exact: true })
+    .click();
+  await page.getByLabel("Nom du dossier", { exact: true }).fill("Camp mobile");
+  await page
+    .getByRole("button", { name: "Créer le dossier", exact: true })
+    .click();
+  await page
+    .locator(".camp-categories button")
+    .filter({ hasText: "Objectifs" })
+    .click();
+  await page
+    .getByLabel("Nos objectifs", { exact: true })
     .fill("Autonomie sur mobile");
+  await page
+    .getByRole("button", { name: "Enregistrer la catégorie", exact: true })
+    .click();
   const dock = await page.locator(".mobile-dock").boundingBox();
   expect(dock.y + dock.height).toBeLessThanOrEqual(741);
 
