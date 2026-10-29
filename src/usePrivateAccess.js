@@ -21,6 +21,7 @@ export default function usePrivateAccess(
 ) {
   const [user, setUser] = useState(null),
     [allowed, setAllowed] = useState([]),
+    [verifiedIdentity, setVerifiedIdentity] = useState(null),
     [loading, setLoading] = useState(Boolean(accessClient)),
     [status, setStatus] = useState(""),
     [authError, setAuthError] = useState(loginReturnError),
@@ -73,6 +74,7 @@ export default function usePrivateAccess(
     if (!accessClient || !user) {
       permissions.current = [];
       setAllowed([]);
+      setVerifiedIdentity(null);
       return;
     }
     setLoading(true);
@@ -85,6 +87,7 @@ export default function usePrivateAccess(
       const names = a.data.map((x) => x.patrol);
       permissions.current = names;
       setAllowed(names);
+      setVerifiedIdentity(identity);
       if (!sync.current) {
         const sessionOwner = { identity, active: true };
         owner.current = sessionOwner;
@@ -227,7 +230,10 @@ export default function usePrivateAccess(
     status,
     authError,
     syncInfo,
-    authorized: Boolean(user) && allowed.includes(patrol),
+    authorized:
+      Boolean(user) &&
+      verifiedIdentity === `${user.id}:${user.email}` &&
+      allowed.includes(patrol),
     save: (p, previous) => {
       if (sync.current && allowed.includes(patrol))
         return sync.current.enqueue(patrol, previous, privatePayload(p));

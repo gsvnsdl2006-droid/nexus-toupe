@@ -26,11 +26,11 @@ export default function AccessGate({ access, patrol, children }) {
         {children}
       </>
     );
-  if (access.loading)
+  if (access.loading && !access.authorized)
     return (
       <div className="empty">
         <Shield />
-        <h3>Vérification de l’accès…</h3>
+        <h3>Chargement…</h3>
       </div>
     );
   if (access.user && access.authorized)
