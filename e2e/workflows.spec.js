@@ -258,5 +258,91 @@ test("every transaction has visible edit and delete buttons under its descriptio
   await page.reload();
   await page.getByRole("button", { name: /PATROUILLE 01/ }).click();
   await page.getByRole("button", { name: "Trésorier", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: "Ouvrir l’événement concours cuisine",
+      exact: true,
+    })
+    .click();
   await expect(page.locator(".treasury-table tbody tr")).toHaveCount(1);
+});
+
+test("treasury opens an event and lets the user edit or delete each transaction within it", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /PATROUILLE 01/ }).click();
+  await page.getByRole("button", { name: "Trésorier", exact: true }).click();
+  await expect(page.locator(".treasury-events .treasury-event")).toHaveCount(4);
+  await expect(page.locator(".treasury-table")).toHaveCount(0);
+  await page
+    .getByRole("button", {
+      name: "Ouvrir l’événement concours cuisine",
+      exact: true,
+    })
+    .click();
+  for (const description of ["Ingrédients", "Cotisation cuisine"]) {
+    await page.getByRole("button", { name: "Opération", exact: true }).click();
+    await page.getByLabel("Description", { exact: true }).fill(description);
+    await page.getByLabel("Montant", { exact: true }).fill("10");
+    await page
+      .getByRole("button", { name: "Enregistrer l’opération", exact: true })
+      .click();
+  }
+  await page
+    .getByRole("button", {
+      name: "Tous les événements de trésorerie",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Ouvrir l’événement concours cuisine",
+      exact: true,
+    }),
+  ).toContainText("2 transactions");
+  await page
+    .getByRole("button", {
+      name: "Ouvrir l’événement journee de patrouille",
+      exact: true,
+    })
+    .click();
+  await expect(page.locator(".treasury-table tbody tr")).toHaveCount(0);
+  await page
+    .getByRole("button", {
+      name: "Tous les événements de trésorerie",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Ouvrir l’événement concours cuisine",
+      exact: true,
+    })
+    .click();
+  await expect(page.locator(".treasury-table tbody tr")).toHaveCount(2);
+  await page
+    .getByRole("button", {
+      name: "Modifier l’opération Ingrédients",
+      exact: true,
+    })
+    .click();
+  await page.getByLabel("Montant", { exact: true }).fill("17");
+  await page
+    .getByRole("button", { name: "Enregistrer l’opération", exact: true })
+    .click();
+  await expect(page.locator(".treasury-table tbody")).toContainText("17");
+  await page
+    .getByRole("button", {
+      name: "Supprimer l’opération Ingrédients",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Confirmer la suppression", exact: true })
+    .click();
+  await expect(page.locator(".treasury-table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".treasury-table tbody")).toContainText(
+    "Cotisation cuisine",
+  );
 });

@@ -65,6 +65,12 @@ test("three authorized accounts share, edit and delete transactions across phone
     await expect(
       page.getByRole("button", { name: "Opération", exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole("button", {
+        name: "Ouvrir l’événement concours cuisine",
+        exact: true,
+      })
+      .click();
     sessions.push({ page, context });
   }
   const [phone, tablet, laptop] = sessions.map((s) => s.page);

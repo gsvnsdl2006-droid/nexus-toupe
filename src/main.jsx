@@ -97,12 +97,19 @@ function App() {
     [saveState, setSaveState] = useState("Enregistré sur cet appareil"),
     [member, setMember] = useState(""),
     [search, setSearch] = useState(""),
-    [activity, setActivity] = useState(activities[0]);
+    [activity, setActivity] = useState(activities[0]),
+    [activityOpen, setActivityOpen] = useState(false);
   useNavigationHistory(patrol, section, (route) => {
     selectPatrol(route.patrol);
     setSection(route.section);
     setModal(null);
   });
+  useEffect(() => {
+    setActivityOpen(false);
+  }, [patrol]);
+  useEffect(() => {
+    if (section !== "treasury") setActivityOpen(false);
+  }, [section]);
   const dataRef = useRef(data);
   dataRef.current = data;
   const access = usePrivateAccess(
@@ -365,6 +372,26 @@ function App() {
   const count = all.reduce((n, p) => n + p.members.length, 0);
   const meetings = all.reduce((n, p) => n + p.meetings.length, 0);
   const sum = totals(p ? p.transactions : all.flatMap((p) => p.transactions));
+  const activityKey = (value) =>
+    String(value || "Autres opérations")
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+  const treasuryActivities = [
+    ...new Map(
+      [
+        ...activities,
+        ...(p?.transactions || []).map(
+          (t) => t.activity || "Autres opérations",
+        ),
+      ].map((a) => [activityKey(a), a]),
+    ).values(),
+  ];
+  const activityTransactions = (p?.transactions || []).filter(
+    (t) => activityKey(t.activity) === activityKey(activity),
+  );
   const titles = {
     overview: "Votre patrouille, au même endroit.",
     treasury: "Une trésorerie bien tenue.",
@@ -825,8 +852,8 @@ function App() {
                   <div>
                     <h2>Cashflow patrouille {patrol.toLowerCase()}</h2>
                     <p>
-                      Chaque opération peut être modifiée ou supprimée avec les
-                      boutons sous sa description.
+                      Ouvre un événement pour retrouver toutes ses transactions
+                      et modifier ou supprimer chacune d’elles.
                     </p>
                   </div>
                   <div className="actions">
@@ -865,58 +892,81 @@ function App() {
                     <strong>{money(sum.income - sum.expense)}</strong>
                   </div>
                 </div>
-                <div className="toolbar">
-                  <label>
-                    Activité
-                    <select
-                      value={activity}
-                      onChange={(e) => setActivity(e.target.value)}
+                {!activityOpen ? (
+                  <div
+                    className="treasury-events"
+                    aria-label="Événements de trésorerie"
+                  >
+                    {treasuryActivities.map((name) => {
+                      const transactions = p.transactions.filter(
+                        (t) => activityKey(t.activity) === activityKey(name),
+                      );
+                      const balance = totals(transactions);
+                      return (
+                        <button
+                          type="button"
+                          className="treasury-event"
+                          key={activityKey(name)}
+                          aria-label={`Ouvrir l’événement ${String(name).trim()}`}
+                          onClick={() => {
+                            setActivity(name);
+                            setActivityOpen(true);
+                          }}
+                        >
+                          <CalendarDays size={25} />
+                          <strong>{String(name).trim()}</strong>
+                          <span>
+                            {transactions.length} transaction
+                            {transactions.length > 1 ? "s" : ""}
+                          </span>
+                          <b>{money(balance.income - balance.expense)}</b>
+                          <small>
+                            Voir les transactions · modifier · supprimer{" "}
+                            <ChevronRight size={14} />
+                          </small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="back"
+                      onClick={() => setActivityOpen(false)}
                     >
-                      {activities.map((a) => (
-                        <option key={a}>{a}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <span>Tous les montants sont en dollars américains ($).</span>
-                </div>
-                <div className="table-wrap treasury-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Description et actions</th>
-                        <th>Entrée / In</th>
-                        <th>Sortie / Out</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {p.transactions
-                        .filter((t) => t.activity === activity)
-                        .map((t) => (
-                          <tr key={t.id}>
-                            <td data-label="Date">{t.date}</td>
-                            <td
-                              data-label="Description"
-                              className="transaction-description"
-                            >
-                              <button
-                                type="button"
-                                className="transaction-title"
-                                aria-label={`Ouvrir l’opération ${t.description}`}
-                                onClick={() =>
-                                  setModal({
-                                    type: "transaction",
-                                    transaction: cloneData(t),
-                                  })
-                                }
+                      <ArrowLeft size={16} /> Tous les événements de trésorerie
+                    </button>
+                    <div className="treasury-event-heading">
+                      <h3>{activity}</h3>
+                      <p>
+                        {activityTransactions.length} transaction
+                        {activityTransactions.length > 1 ? "s" : ""} · Modifier
+                        ou supprimer chaque ligne ci-dessous.
+                      </p>
+                    </div>
+                    <div className="table-wrap treasury-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Description et actions</th>
+                            <th>Entrée / In</th>
+                            <th>Sortie / Out</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activityTransactions.map((t) => (
+                            <tr key={t.id}>
+                              <td data-label="Date">{t.date}</td>
+                              <td
+                                data-label="Description"
+                                className="transaction-description"
                               >
-                                {t.description}
-                              </button>
-                              <div className="transaction-actions">
                                 <button
-                                  className="secondary"
                                   type="button"
-                                  aria-label={`Modifier l’opération ${t.description}`}
+                                  className="transaction-title"
+                                  aria-label={`Ouvrir l’opération ${t.description}`}
                                   onClick={() =>
                                     setModal({
                                       type: "transaction",
@@ -924,41 +974,57 @@ function App() {
                                     })
                                   }
                                 >
-                                  Modifier
+                                  {t.description}
                                 </button>
-                                <button
-                                  className="delete-action"
-                                  type="button"
-                                  aria-label={`Supprimer l’opération ${t.description}`}
-                                  onClick={() =>
-                                    setModal({
-                                      type: "transaction-delete",
-                                      transaction: cloneData(t),
-                                    })
-                                  }
-                                >
-                                  Supprimer
-                                </button>
-                              </div>
-                            </td>
-                            <td data-label="Entrée" className="positive">
-                              {t.type === "in" ? money(t.amount) : "—"}
-                            </td>
-                            <td data-label="Sortie">
-                              {t.type === "out" ? money(t.amount) : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                  {!p.transactions.some((t) => t.activity === activity) && (
-                    <Empty
-                      icon={Wallet}
-                      title="Une caisse prête pour vos projets"
-                      text="Ajoutez votre première entrée ou dépense pour cette activité."
-                    />
-                  )}
-                </div>
+                                <div className="transaction-actions">
+                                  <button
+                                    className="secondary"
+                                    type="button"
+                                    aria-label={`Modifier l’opération ${t.description}`}
+                                    onClick={() =>
+                                      setModal({
+                                        type: "transaction",
+                                        transaction: cloneData(t),
+                                      })
+                                    }
+                                  >
+                                    Modifier
+                                  </button>
+                                  <button
+                                    className="delete-action"
+                                    type="button"
+                                    aria-label={`Supprimer l’opération ${t.description}`}
+                                    onClick={() =>
+                                      setModal({
+                                        type: "transaction-delete",
+                                        transaction: cloneData(t),
+                                      })
+                                    }
+                                  >
+                                    Supprimer
+                                  </button>
+                                </div>
+                              </td>
+                              <td data-label="Entrée" className="positive">
+                                {t.type === "in" ? money(t.amount) : "—"}
+                              </td>
+                              <td data-label="Sortie">
+                                {t.type === "out" ? money(t.amount) : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {!activityTransactions.length && (
+                        <Empty
+                          icon={Wallet}
+                          title="Une caisse prête pour vos projets"
+                          text="Ajoutez votre première entrée ou dépense pour cette activité."
+                        />
+                      )}
+                    </div>
+                  </>
+                )}
               </AccessGate>
             )}
             {section === "secretary" && (
@@ -1523,6 +1589,7 @@ function App() {
                       else p.transactions[index] = transaction;
                     });
                     setActivity(f.activity);
+                    setActivityOpen(true);
                     setModal(null);
                   }}
                 >
@@ -1575,6 +1642,13 @@ function App() {
                         name="activity"
                         defaultValue={modal.transaction?.activity || activity}
                       >
+                        {!activities.includes(
+                          modal.transaction?.activity || activity,
+                        ) && (
+                          <option>
+                            {modal.transaction?.activity || activity}
+                          </option>
+                        )}
                         {activities.map((a) => (
                           <option key={a}>{a}</option>
                         ))}

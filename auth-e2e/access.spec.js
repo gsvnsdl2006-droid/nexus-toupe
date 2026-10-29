@@ -37,11 +37,23 @@ for (const allowed of [[], ["Lions"]])
       await expect(
         page.getByRole("button", { name: "Opération", exact: true }),
       ).toBeVisible();
+      await page
+        .getByRole("button", {
+          name: "Ouvrir l’événement concours cuisine",
+          exact: true,
+        })
+        .click();
       await expect(page.locator("tbody")).toContainText("Cotisation privée");
       await page.reload();
       await page.getByRole("button", { name: /PATROUILLE 02/ }).click();
       await page
         .getByRole("button", { name: "Trésorier", exact: true })
+        .click();
+      await page
+        .getByRole("button", {
+          name: "Ouvrir l’événement concours cuisine",
+          exact: true,
+        })
         .click();
       await expect(page.locator("tbody")).toContainText("Cotisation privée");
       await page.getByRole("button", { name: /Tableau de bord ·/ }).click();
