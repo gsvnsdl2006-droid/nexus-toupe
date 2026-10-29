@@ -428,7 +428,11 @@ function App() {
               <ArrowLeft size={16} />
               Toutes les patrouilles
             </button>
-            {section === "photographer" ? <Photographer /> : <Codes />}
+            {section === "photographer" ? (
+              <Photographer user={access.user} onSignIn={access.signInGoogle} />
+            ) : (
+              <Codes />
+            )}
           </>
         ) : !patrol ? (
           <>
@@ -671,7 +675,13 @@ function App() {
                 </button>
               ))}
             </div>
-            {section === "photographer" && <Photographer patrol={patrol} />}
+            {section === "photographer" && (
+              <Photographer
+                patrol={patrol}
+                user={access.user}
+                onSignIn={access.signInGoogle}
+              />
+            )}
             {section === "codes" && <Codes />}
             {section === "overview" && (
               <>

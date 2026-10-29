@@ -1,6 +1,8 @@
+import { authorizeLeader } from "../lib/leader-auth.js";
 import { getStore } from "@netlify/blobs";
 import { createPhotographerHandler } from "../lib/photographer.js";
 export default createPhotographerHandler({
+  authorizeDelete: authorizeLeader,
   store: () =>
     getStore({ name: "nexus-photographer-v1", consistency: "strong" }),
 });

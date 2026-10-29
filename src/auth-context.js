@@ -18,6 +18,7 @@ export function readLoginReturn() {
         "treasury",
         "secretary",
         "progress",
+        "photographer",
         "codes",
       ].includes(saved.section)
         ? saved.section

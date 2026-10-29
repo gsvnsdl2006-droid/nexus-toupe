@@ -48,6 +48,7 @@ async function readBody(request) {
 }
 export function createPhotographerHandler({
   store,
+  authorizeDelete = async () => ({ ok: false, status: 401 }),
   now = () => new Date().toISOString(),
 }) {
   return async (request) => {
@@ -63,7 +64,8 @@ export function createPhotographerHandler({
           if (!validId(event))
             return json({ error: "Événement invalide." }, 400);
           const record = await store().get(key, { type: "json" });
-          if (!record) return json({ error: "Événement introuvable." }, 404);
+          if (!record || record.deleted)
+            return json({ error: "Événement introuvable." }, 404);
           const index = url.searchParams.get("photo");
           if (index === null) return json(summary(record));
           if (!/^[0-3]$/.test(index) || !record.photos[Number(index)])
@@ -72,7 +74,7 @@ export function createPhotographerHandler({
           return new Response(image.bytes, {
             headers: {
               "Content-Type": image.mime,
-              "Cache-Control": "public,max-age=31536000,immutable",
+              "Cache-Control": "no-store",
               "Content-Disposition": `inline; filename="Orion-${event}-${index}.jpg"`,
               "X-Content-Type-Options": "nosniff",
             },
@@ -98,6 +100,45 @@ export function createPhotographerHandler({
           events,
           cursor: offset + 20 < keys.length ? String(offset + 20) : null,
         });
+      }
+      if (request.method === "DELETE") {
+        if (!validId(event) || url.searchParams.has("photo"))
+          return json({ error: "Événement invalide." }, 400);
+        const origin = request.headers.get("origin");
+        if (origin && origin !== url.origin)
+          return json({ error: "Origine invalide." }, 403);
+        const permission = await authorizeDelete(request);
+        if (!permission.ok)
+          return json(
+            {
+              error:
+                permission.status === 503
+                  ? "Impossible de vérifier le compte administrateur. Réessaie."
+                  : "Seuls les deux administrateurs peuvent supprimer cet événement.",
+            },
+            permission.status || 403,
+          );
+        const current = await store().getWithMetadata(key, { type: "json" });
+        if (!current || current.data.deleted) return json({ deleted: true });
+        // Replace the entire image payload with a tiny tombstone: old anonymous
+        // publish retries cannot resurrect a deleted album or its photos.
+        if (!current.etag) throw Error("missing_etag");
+        const deleted = await store().setJSON(
+          key,
+          {
+            id: event,
+            patrol: Number(patrol),
+            deleted: true,
+            deletedAt: now(),
+          },
+          { onlyIfMatch: current.etag, metadata: { deleted: true } },
+        );
+        if (!deleted.modified)
+          return json(
+            { error: "L’événement a changé. Actualise l’album et réessaie." },
+            409,
+          );
+        return json({ deleted: true });
       }
       if (request.method !== "POST")
         return json({ error: "Méthode non autorisée." }, 405);
@@ -174,6 +215,13 @@ export function createPhotographerHandler({
         const existing = await store().getMetadata(
           `events/${patrol}/${input.id}`,
         );
+        if (existing?.metadata.deleted)
+          return json(
+            {
+              error: "Cet événement a été supprimé. Crée un nouvel événement.",
+            },
+            409,
+          );
         if (existing?.metadata.fingerprint !== fingerprint)
           return json(
             {

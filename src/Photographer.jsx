@@ -7,7 +7,10 @@ import {
   Upload,
   X,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
+import { accessClient } from "./access";
+import { isLeader } from "./leader-policy";
 import { get, set } from "idb-keyval";
 import { patrols, today } from "./model";
 import { compressEventPhoto } from "./photographer-images";
@@ -27,7 +30,11 @@ async function call(url, options) {
     throw Error(data.error || "Envoi impossible. Réessaie dans un instant.");
   return data;
 }
-export default function Photographer({ patrol: initialPatrol }) {
+export default function Photographer({
+  patrol: initialPatrol,
+  user,
+  onSignIn,
+}) {
   const [patrol, setPatrol] = useState(
       Math.max(0, patrols.indexOf(initialPatrol)),
     ),
@@ -43,7 +50,8 @@ export default function Photographer({ patrol: initialPatrol }) {
     [saving, setSaving] = useState(false),
     [draftPatrol, setDraftPatrol] = useState(null),
     [notice, setNotice] = useState(""),
-    [preview, setPreview] = useState(null);
+    [preview, setPreview] = useState(null),
+    [deleting, setDeleting] = useState(false);
   const writes = useRef(Promise.resolve());
   const request = useRef(0),
     eventId = useRef(crypto.randomUUID()),
@@ -156,7 +164,7 @@ export default function Photographer({ patrol: initialPatrol }) {
   }
   async function publish(e) {
     e.preventDefault();
-    if (!photos.length || processing || saving) return;
+    if (!photos.length || processing || saving || deleting) return;
     setSaving(true);
     setError("");
     setNotice("");
@@ -188,6 +196,35 @@ export default function Photographer({ patrol: initialPatrol }) {
       setSaving(false);
     }
   }
+  async function removeEvent(event) {
+    if (!isLeader(user) || deleting || saving) return;
+    if (
+      !confirm(
+        `Supprimer définitivement « ${event.title} » et toutes ses photos ?`,
+      )
+    )
+      return;
+    setDeleting(true);
+    setError("");
+    setNotice("");
+    try {
+      const { data, error } = await accessClient.auth.getSession();
+      if (error || !data.session?.access_token)
+        throw Error("Reconnecte-toi avec ton compte administrateur.");
+      await call(`${endpoint}?patrol=${event.patrol}&event=${event.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      });
+      request.current++;
+      setLoading(false);
+      setEvents((old) => old.filter((e) => e.id !== event.id));
+      setNotice("Événement et photos supprimés de l’album partagé.");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDeleting(false);
+    }
+  }
   return (
     <section className="photographer" aria-label="Photographe">
       <div className="photo-heading">
@@ -204,7 +241,7 @@ export default function Photographer({ patrol: initialPatrol }) {
             setEditing(true);
             setNotice("");
           }}
-          disabled={saving || draftPatrol !== patrol}
+          disabled={saving || deleting || draftPatrol !== patrol}
         >
           <Plus size={17} /> Créer un événement
         </button>
@@ -215,7 +252,7 @@ export default function Photographer({ patrol: initialPatrol }) {
           <select
             aria-label="Patrouille"
             value={patrol}
-            disabled={editing || saving || draftPatrol !== patrol}
+            disabled={editing || saving || deleting || draftPatrol !== patrol}
             onChange={(e) => setPatrol(Number(e.target.value))}
           >
             {patrols.map((p, i) => (
@@ -228,11 +265,31 @@ export default function Photographer({ patrol: initialPatrol }) {
         <button
           className="secondary"
           onClick={() => load()}
-          disabled={loading || saving}
+          disabled={loading || saving || deleting}
         >
           <RefreshCw size={16} /> Actualiser
         </button>
       </div>
+      {!isLeader(user) && onSignIn && accessClient && (
+        <button
+          type="button"
+          className="photo-admin-login secondary"
+          onClick={async () => {
+            try {
+              await onSignIn();
+            } catch (e) {
+              setError(e.message);
+            }
+          }}
+        >
+          Connexion administrateur
+        </button>
+      )}
+      {isLeader(user) && (
+        <p className="hint">
+          Compte administrateur · tu peux supprimer un événement et ses photos.
+        </p>
+      )}
       {editing && (
         <form className="photo-event-form" onSubmit={publish}>
           <div className="photo-form-title">
@@ -313,7 +370,7 @@ export default function Photographer({ patrol: initialPatrol }) {
           </p>
           <button
             className="primary"
-            disabled={saving || processing || !photos.length}
+            disabled={saving || deleting || processing || !photos.length}
             type="submit"
           >
             <Camera size={17} />
@@ -329,7 +386,7 @@ export default function Photographer({ patrol: initialPatrol }) {
           <button
             className="secondary"
             onClick={() => load()}
-            disabled={loading || saving}
+            disabled={loading || saving || deleting}
           >
             Réessayer l’album
           </button>
@@ -364,6 +421,17 @@ export default function Photographer({ patrol: initialPatrol }) {
               <div className="photo-event-title">
                 <span className="eyebrow">{patrols[event.patrol]}</span>
                 <h3>{event.title}</h3>
+                {isLeader(user) && (
+                  <button
+                    type="button"
+                    className="delete-action photo-delete"
+                    disabled={deleting || saving}
+                    aria-label={`Supprimer l’événement photo ${event.title}`}
+                    onClick={() => removeEvent(event)}
+                  >
+                    <Trash2 size={15} /> Supprimer l’événement et ses photos
+                  </button>
+                )}
                 <p>
                   <CalendarDays size={15} />
                   {new Intl.DateTimeFormat("fr-FR", {
@@ -397,7 +465,7 @@ export default function Photographer({ patrol: initialPatrol }) {
       {cursor && (
         <button
           className="secondary"
-          disabled={loading || saving}
+          disabled={loading || saving || deleting}
           onClick={() => load(cursor)}
         >
           Voir plus de souvenirs

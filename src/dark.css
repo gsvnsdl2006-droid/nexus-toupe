@@ -3328,3 +3328,15 @@ input[type="file"] {
 .legacy-camp .delete-action {
   margin: 10px 0 0 10px;
 }
+.photo-admin-login {
+  margin-bottom: 14px;
+  font-size: 12px;
+}
+.photo-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 14px;
+  white-space: normal;
+  text-align: left;
+}
