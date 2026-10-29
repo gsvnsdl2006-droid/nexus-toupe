@@ -33,7 +33,12 @@ test("member dashboard counts distinct badges and a personalized souvenir PDF do
   await expect(page.locator(".progress-dashboard")).toContainText("0 / 93");
   const portrait = page.getByRole("img", { name: "Photo de profil de Marc Test", exact: true });
   await expect(portrait).toBeVisible();
-  expect(await portrait.evaluate((img) => img.naturalWidth > 0 && img.width >= 144)).toBe(true);
+  expect(await portrait.evaluate((img) => img.naturalWidth > 0 && img.getBoundingClientRect().width === 64)).toBe(true);
+  expect(await page.locator(".progress-member-profile").evaluate((header) => {
+    const image = header.querySelector("img").getBoundingClientRect();
+    const info = header.lastElementChild.getBoundingClientRect();
+    return image.right <= info.left && image.top < info.bottom && info.top < image.bottom;
+  })).toBe(true);
   await page.locator(".badge-card").filter({ hasText: "Ami de Dieu" }).click();
   await page
     .getByLabel("Ce que j’ai accompli", { exact: true })

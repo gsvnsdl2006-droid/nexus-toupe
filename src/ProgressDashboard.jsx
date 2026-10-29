@@ -13,7 +13,7 @@ export default function ProgressDashboard({ patrol, member }) {
       className="progress-dashboard"
       aria-label={`Progression de ${person?.name || "ce membre"}`}
     >
-      <header className="progress-member-profile">
+      <div className="progress-member-profile">
         {person?.photo ? (
           <img src={person.photo} alt={`Photo de profil de ${person.name}`} />
         ) : (
@@ -26,7 +26,7 @@ export default function ProgressDashboard({ patrol, member }) {
           <h3>{person?.name}</h3>
           <p>Mes badges, mes réalisations et ma progression</p>
         </div>
-      </header>
+      </div>
       <div className="progress-dashboard-main">
         <div
           className="attendance-ring progress-ring"
