@@ -76,3 +76,7 @@ The web manifest and iOS touch icon use the green Nexus/Orion artwork: Nexus let
 The two troop admins can also delete simplified camp dossiers and the legacy camp workbook. Enable the server protection once with [supabase/camp-deletion.sql](supabase/camp-deletion.sql) in the existing Supabase SQL Editor. The app offers the same SQL file for download and keeps deletion disabled until the server verifies the guard. No API keys or Google provider changes are needed.
 
 Photographer event deletion is available to the two confirmed admins after Google sign-in through **Connexion administrateur** in the public album. The server checks the actual Supabase user and confirmed email, then removes the event and all its photos after confirmation. No additional SQL is needed for photo-album deletion; camp dossier deletion still uses the separate migration above.
+
+## Vowel and semaphore codes
+
+Codes now includes **Code des voyelles** and **Sémaphore**, with instant encoding/decoding, clickable visual A–Z references, copied/downloaded text and a mobile visual message preview. Vowel anchors A/E/I/O/U use 1/2/3/4/5 large hats (`^`), with one small hat (`˄`) per subsequent alphabet position. Semaphore follows the supplied facing-the-signaller flag chart; two Unicode direction arrows form each portable text token. Spaces separate letters and `/` separates words in both modes. The semaphore space/rest position is also illustrated. These tools run locally and require no account or database changes.

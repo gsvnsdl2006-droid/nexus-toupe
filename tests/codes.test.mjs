@@ -128,3 +128,46 @@ test("Atbash reverses the alphabet and rejects invalid keys only for keyed modes
     /invalid_key/,
   );
 });
+
+test("vowel hats follow the five vowel anchors and round-trip the complete alphabet", () => {
+  const map = Object.fromEntries(alphabetMap("vowels"));
+  assert.equal(map.A, "^");
+  assert.equal(map.B, "^˄");
+  assert.equal(map.E, "^^");
+  assert.equal(map.I, "^^^");
+  assert.equal(map.O, "^^^^");
+  assert.equal(map.U, "^^^^^");
+  assert.equal(map.Y, "^^^^^˄˄˄˄");
+  assert.equal(map.Z, "^^^^^˄˄˄˄˄");
+  assert.equal(new Set(Object.values(map)).size, 26);
+  const message = "AEIOU BONJOUR XYZ";
+  assert.equal(
+    transformCode(transformCode(message, "vowels").text, "vowels", {
+      decode: true,
+    }).text,
+    message,
+  );
+});
+test("semaphore follows the supplied facing-the-signaller chart including J, V, Y and Z", () => {
+  const map = Object.fromEntries(alphabetMap("semaphore"));
+  assert.equal(map.A, "↙↓");
+  assert.equal(map.J, "↑→");
+  assert.equal(map.V, "↑↘");
+  assert.equal(map.Y, "↖→");
+  assert.equal(map.Z, "→↘");
+  assert.equal(new Set(Object.values(map)).size, 26);
+  const message = "ABCDEFGHIJKLMNOPQRSTUVWXYZ SOS";
+  const encoded = transformCode(message, "semaphore").text;
+  assert.equal(
+    transformCode(encoded, "semaphore", { decode: true }).text,
+    message,
+  );
+  for (const mode of ["vowels", "semaphore"]) {
+    const encoded = transformCode("ÉTÉ 3!", mode);
+    assert.deepEqual(encoded.unsupported, ["3", "!"]);
+    assert.equal(
+      transformCode(encoded.text, mode, { decode: true }).text,
+      "ETE 3!",
+    );
+  }
+});

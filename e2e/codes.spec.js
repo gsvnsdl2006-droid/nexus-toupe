@@ -110,3 +110,67 @@ test("Codes is usable at 320px from a patrol with validation and unsupported cha
     "ECLAIREUR مرحبا!",
   );
 });
+
+test("vowel hats and visual semaphore encode, decode and compose from the reference on mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Atelier des codes Morse/ }).click();
+  await page.getByRole("button", { name: /Code des voyelles/ }).click();
+  await page.getByLabel("Phrase à coder", { exact: true }).fill("BE UZ");
+  await expect(page.getByLabel("Résultat", { exact: true })).toHaveValue(
+    "^˄ ^^ / ^^^^^ ^^^^^˄˄˄˄˄",
+  );
+  await expect(
+    page.locator(".cipher-visual-message .vowel-symbol"),
+  ).toHaveCount(4);
+  await page.getByRole("button", { name: "Décoder", exact: true }).click();
+  await page.getByLabel("Code à décoder", { exact: true }).fill("");
+  await page
+    .getByRole("button", { name: "Ajouter B au message", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Ajouter E au message", exact: true })
+    .click();
+  await expect(page.getByLabel("Résultat", { exact: true })).toHaveValue("BE");
+  await page.getByRole("button", { name: /Sémaphore L’alphabet/ }).click();
+  await page.getByLabel("Code à décoder", { exact: true }).fill("");
+  for (const letter of ["J", "V", "Y", "Z"])
+    await page
+      .getByRole("button", {
+        name: `Ajouter ${letter} au message`,
+        exact: true,
+      })
+      .click();
+  await expect(page.getByLabel("Résultat", { exact: true })).toHaveValue(
+    "JVYZ",
+  );
+  await page
+    .getByRole("button", {
+      name: "Ajouter un espace entre les mots",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Ajouter A au message", exact: true })
+    .click();
+  await expect(page.getByLabel("Résultat", { exact: true })).toHaveValue(
+    "JVYZ A",
+  );
+  await expect(
+    page.locator(".cipher-visual-message .semaphore-symbol"),
+  ).toHaveCount(5);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.reload();
+  await page.getByRole("button", { name: /Atelier des codes Morse/ }).click();
+  await expect(page.getByLabel("Résultat", { exact: true })).toHaveValue(
+    "JVYZ A",
+  );
+  await page.locator(".cipher-visual-message").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "/tmp/nexus-semaphore-mobile.png" });
+});

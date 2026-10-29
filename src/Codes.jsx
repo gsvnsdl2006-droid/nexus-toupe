@@ -7,13 +7,18 @@ import {
   ArrowRightLeft,
   KeyRound,
   Check,
+  Flag,
+  ChevronUp,
 } from "lucide-react";
+import { SemaphoreSymbol, VowelSymbol } from "./CodeSymbols";
 import { ALPHABET, alphabetMap, transformCode } from "./codes.mjs";
 const modes = [
   ["morse", "Morse international", "· · · — — — · · ·", Radio],
   ["numbers", "Alphabet numéroté", "A = 1, B = 2…", Hash],
   ["letters", "Substitution de lettres", "A = K, B = L…", KeyRound],
   ["atbash", "Alphabet inversé", "A = Z, B = Y…", ArrowRightLeft],
+  ["vowels", "Code des voyelles", "Grands et petits chapeaux", ChevronUp],
+  ["semaphore", "Sémaphore", "L’alphabet aux deux drapeaux", Flag],
 ];
 function draft() {
   try {
@@ -186,6 +191,29 @@ export default function Codes() {
           Exemple : A = K donne B = L. Choisis librement les deux lettres.
         </p>
       )}
+      {state.mode === "vowels" && (
+        <p className="hint">
+          A, E, I, O, U : 1 à 5 grands chapeaux (^). Ajoute un petit chapeau (˄)
+          par lettre après la voyelle précédente. Exemple : B = ^˄, E = ^^. Un
+          espace sépare les lettres ; / sépare les mots.
+        </p>
+      )}
+      {state.mode === "semaphore" && (
+        <p className="hint">
+          Lis les positions face au signaleur, comme sur ton tableau. Les deux
+          flèches représentent les deux bras. En mode Décoder, touche les
+          lettres de l’alphabet ci-dessous pour composer ton message ; / sépare
+          les mots.
+        </p>
+      )}
+      {["vowels", "semaphore"].includes(state.mode) && state.decode && (
+        <button
+          className="secondary"
+          onClick={() => change("text", state.text.trimEnd() + " / ")}
+        >
+          Ajouter un espace entre les mots
+        </button>
+      )}
       <div className="cipher-editors">
         <div>
           <label>
@@ -237,6 +265,41 @@ export default function Codes() {
           </div>
         </div>
       </div>
+      {["vowels", "semaphore"].includes(state.mode) && result.text && (
+        <div className="cipher-visual-message" aria-label="Message codé visuel">
+          {(state.decode ? state.text : result.text)
+            .trim()
+            .split(/\s+/)
+            .map((token, i) => {
+              if (token === "/")
+                return (
+                  <span
+                    key={i}
+                    className="cipher-word-gap"
+                    aria-label="Espace entre les mots"
+                  >
+                    /
+                  </span>
+                );
+              const letter = result.mapping.find(
+                ([, value]) => value === token,
+              )?.[0];
+              return (
+                <span key={i} className="cipher-visual-letter">
+                  {letter ? (
+                    state.mode === "semaphore" ? (
+                      <SemaphoreSymbol letter={letter} />
+                    ) : (
+                      <VowelSymbol token={token} />
+                    )
+                  ) : (
+                    <code>{token}</code>
+                  )}
+                </span>
+              );
+            })}
+        </div>
+      )}
       {result.error && (
         <p className="cipher-warning" role="alert">
           {result.error}
@@ -261,16 +324,50 @@ export default function Codes() {
           Alphabet utilisé <span>{result.mapping.length} correspondances</span>
         </summary>
         <div
-          className={`cipher-mapping ${state.mode === "morse" ? "morse-mapping" : ""}`}
+          className={`cipher-mapping ${state.mode === "morse" ? "morse-mapping" : state.mode === "vowels" ? "vowels-mapping" : ""}`}
         >
-          {result.mapping.map(([from, to]) => (
-            <div key={from}>
-              <strong>{from}</strong>
-              <span>=</span>
-              <code>{to}</code>
-            </div>
-          ))}
+          {result.mapping.map(([from, to]) =>
+            ["vowels", "semaphore"].includes(state.mode) ? (
+              <button
+                className="cipher-symbol-key"
+                key={from}
+                aria-label={`Ajouter ${from} au message`}
+                onClick={() =>
+                  change(
+                    "text",
+                    (
+                      state.text +
+                      (state.decode && state.text && !/\s$/.test(state.text)
+                        ? " "
+                        : "") +
+                      (state.decode ? to : from)
+                    ).slice(0, 2500),
+                  )
+                }
+              >
+                <strong>{from}</strong>
+                {state.mode === "semaphore" ? (
+                  <SemaphoreSymbol letter={from} />
+                ) : (
+                  <VowelSymbol token={to} />
+                )}
+                <code>{to}</code>
+              </button>
+            ) : (
+              <div key={from}>
+                <strong>{from}</strong>
+                <span>=</span>
+                <code>{to}</code>
+              </div>
+            ),
+          )}
         </div>
+        {state.mode === "semaphore" && (
+          <div className="semaphore-space-reference">
+            <SemaphoreSymbol letter=" " />
+            <span>Espace entre les mots · /</span>
+          </div>
+        )}
       </details>
     </section>
   );
