@@ -93,6 +93,9 @@ test("patrol workflows persist and remain isolated", async ({ page }) => {
   const wb = XLSX.read(await readFile(await file.path()));
   expect(wb.Sheets["Objectifs"].B5.v).toBe("Autonomie de la patrouille");
   expect(wb.SheetNames).toHaveLength(10);
+  await page
+    .getByRole("button", { name: "Tableau de bord · Goélands", exact: true })
+    .click();
   await page.getByRole("button", { name: "Toutes les patrouilles" }).click();
   await page.getByRole("button", { name: /PATROUILLE 02/ }).click();
   await expect(page.locator(".patrol-title")).toContainText("0");
@@ -150,4 +153,46 @@ test("mobile landing and patrol navigation fit the viewport", async ({
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
+
+test("Back returns to the selected patrol dashboard before leaving the patrol", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.getByRole("button", { name: /PATROUILLE 02/ }).click();
+  for (const section of [
+    "Trésorier",
+    "Secrétariat",
+    "Progression",
+    "Codes",
+    "Photographe",
+  ]) {
+    await page.getByRole("button", { name: section, exact: true }).click();
+    await page
+      .getByRole("button", { name: "Tableau de bord · Lions", exact: true })
+      .click();
+    await expect(page.locator(".workspace-grid")).toBeVisible();
+    await expect(page.locator(".patrol-title")).toContainText("Lions");
+    await expect(page.locator(".patrol-card")).toHaveCount(0);
+  }
+  await page
+    .getByRole("button", { name: "Toutes les patrouilles", exact: true })
+    .click();
+  await expect(page.locator(".patrol-card")).toHaveCount(6);
+});
+test("browser Back and Forward retain the patrol navigation hierarchy", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /PATROUILLE 04/ }).click();
+  await page.getByRole("button", { name: "Trésorier", exact: true }).click();
+  await page.goBack();
+  await expect(page.locator(".workspace-grid")).toBeVisible();
+  await expect(page.locator(".patrol-title")).toContainText("Orcs");
+  await page.goBack();
+  await expect(page.locator(".patrol-card")).toHaveCount(6);
+  await page.goForward();
+  await expect(page.locator(".workspace-grid")).toBeVisible();
+  await expect(page.locator(".patrol-title")).toContainText("Orcs");
 });

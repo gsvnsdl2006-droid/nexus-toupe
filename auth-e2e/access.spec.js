@@ -26,6 +26,7 @@ for (const allowed of [[], ["Lions"]])
       page.getByRole("button", { name: "Opération", exact: true }),
     ).toHaveCount(0);
     if (allowed.length) {
+      await page.getByRole("button", { name: /Tableau de bord ·/ }).click();
       await page
         .getByRole("button", { name: "Toutes les patrouilles" })
         .click();
@@ -43,6 +44,7 @@ for (const allowed of [[], ["Lions"]])
         .getByRole("button", { name: "Trésorier", exact: true })
         .click();
       await expect(page.locator("tbody")).toContainText("Cotisation privée");
+      await page.getByRole("button", { name: /Tableau de bord ·/ }).click();
       await page
         .getByRole("button", { name: "Toutes les patrouilles" })
         .click();

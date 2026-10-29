@@ -1,3 +1,4 @@
+import useNavigationHistory from "./useNavigationHistory";
 import BadgeMemoryPanel from "./BadgeMemoryPanel";
 import ProgressDashboard from "./ProgressDashboard";
 import { recoverPhotos } from "./photo-vault";
@@ -96,6 +97,11 @@ function App() {
     [member, setMember] = useState(""),
     [search, setSearch] = useState(""),
     [activity, setActivity] = useState(activities[0]);
+  useNavigationHistory(patrol, section, (route) => {
+    selectPatrol(route.patrol);
+    setSection(route.section);
+    setModal(null);
+  });
   const dataRef = useRef(data);
   dataRef.current = data;
   const access = usePrivateAccess(
@@ -633,8 +639,16 @@ function App() {
           </>
         ) : (
           <>
-            <button className="back" onClick={goHome}>
-              <ArrowLeft size={15} /> Toutes les patrouilles
+            <button
+              className="back"
+              onClick={() =>
+                section === "overview" ? goHome() : setSection("overview")
+              }
+            >
+              <ArrowLeft size={15} />
+              {section === "overview"
+                ? "Toutes les patrouilles"
+                : `Tableau de bord · ${patrol}`}
             </button>
             <div className="patrol-title">
               <div className="patrol-heading">
