@@ -13,6 +13,20 @@ export default function ProgressDashboard({ patrol, member }) {
       className="progress-dashboard"
       aria-label={`Progression de ${person?.name || "ce membre"}`}
     >
+      <header className="progress-member-profile">
+        {person?.photo ? (
+          <img src={person.photo} alt={`Photo de profil de ${person.name}`} />
+        ) : (
+          <div className="progress-member-initials" aria-label="Photo non ajoutée">
+            {person?.name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("")}
+          </div>
+        )}
+        <div>
+          <div className="eyebrow">MON PROFIL SCOUT</div>
+          <h3>{person?.name}</h3>
+          <p>Mes badges, mes réalisations et ma progression</p>
+        </div>
+      </header>
       <div className="progress-dashboard-main">
         <div
           className="attendance-ring progress-ring"
@@ -45,7 +59,6 @@ export default function ProgressDashboard({ patrol, member }) {
         </div>
         <div>
           <div className="eyebrow">MON PARCOURS SCOUT</div>
-          <h3>{person?.name}</h3>
           <p>
             <b>{s.done} / 93</b> badges terminés
           </p>

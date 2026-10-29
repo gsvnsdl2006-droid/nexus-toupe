@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Download, Image, FileText } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Download, Image, FileText, Share2 } from "lucide-react";
 export default function BadgeMemoryPanel({
   title,
   member,
@@ -14,6 +14,12 @@ export default function BadgeMemoryPanel({
     [excluded, setExcluded] = useState(new Set()),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [prepared, setPrepared] = useState(null);
+  useEffect(() => {
+    return () => {
+      if (prepared) URL.revokeObjectURL(prepared.url);
+    };
+  }, [prepared]);
   const photos = entries.flatMap((e) =>
     (e.photos || []).map((p) => ({
       ...p,
@@ -24,6 +30,7 @@ export default function BadgeMemoryPanel({
   async function download() {
     setBusy(true);
     setError("");
+    setPrepared(null);
     try {
       const { badgeMemoryPdf } = await import("./badge-memory");
       const blob = await badgeMemoryPdf({
@@ -38,18 +45,34 @@ export default function BadgeMemoryPanel({
         includeCover: coverOn,
         selectedPhotos: photos.filter((p) => !excluded.has(p.key)),
       });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `Souvenir - ${title} - ${member.name}.pdf`.replace(
+      const filename = `Souvenir - ${title} - ${member.name}.pdf`.replace(
         /[<>:"\/\\|?*\u0000-\u001f]/g,
         "-",
       );
+      const file = new File([blob], filename, { type: "application/pdf" });
+      const url = URL.createObjectURL(file);
+      setPrepared({ url, file, filename });
+      // Keep a real link available: mobile browsers may block an asynchronous
+      // synthetic click or preview the PDF instead of downloading it.
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.append(a);
       a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      a.remove();
+
     } catch (e) {
       setError(e.message);
     } finally {
       setBusy(false);
+    }
+  }
+  async function share() {
+    try {
+      await navigator.share({ files: [prepared.file] });
+    } catch (e) {
+      if (e.name !== "AbortError")
+        setError("Utilisez Enregistrer le PDF pour télécharger votre souvenir.");
     }
   }
   return (
@@ -112,6 +135,21 @@ export default function BadgeMemoryPanel({
         <Download size={17} />
         {busy ? "Création de ton souvenir…" : "Télécharger mon souvenir PDF"}
       </button>
+      {prepared && (
+        <div className="memory-download-ready" role="status">
+          <p>Ton PDF est prêt. Si le téléchargement ne démarre pas, utilise ce lien.</p>
+          <a className="primary" href={prepared.url} download={prepared.filename}>
+            <Download size={17} /> Enregistrer le PDF
+          </a>
+          {typeof navigator.canShare === "function" &&
+            navigator.canShare({ files: [prepared.file] }) && (
+              <button type="button" onClick={share}>
+                <Share2 size={17} /> Partager / Enregistrer dans Fichiers
+              </button>
+            )}
+          <p>Sur téléphone, si un aperçu s’ouvre, utilise Partager puis Enregistrer dans Fichiers ou Télécharger.</p>
+        </div>
+      )}
       {error && <p role="alert">{error}</p>}
     </section>
   );
