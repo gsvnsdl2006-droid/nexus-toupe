@@ -31,3 +31,13 @@ Albums are stored as JSON with base64 images: four maximum-size 450 KiB photos u
 ## Separate album viewing from upload throttling
 
 Public GET remains at `photographer.mjs` without the function-level upload rate limit. POST/DELETE on that legacy URL redirect with HTTP 307 to `photographer-write.mjs`, which retains the real handler, the same site-wide store, admin deletion checks and an IP/domain mutation rate limit (40 calls/minute). Photo viewing across browsers or scouts sharing a network no longer consumes that mutation allowance. Existing album URLs and data remain valid. The client gives an explicit 429 message and preserves drafts when writes are throttled.
+
+# Patrol support spaces
+
+`patrol-support.mjs` serves public kit lists, case-study attachments and equipment. It redirects mutations with method preservation to `patrol-support-write.mjs`, which uses the site-wide `nexus-patrol-support-v1` store and a separate IP/domain write rate limit. Keys are scoped by validated section (`kit`, `cases`, `equipment`), patrol index and UUID. Incident reports never use this endpoint.
+
+Kit creation/editing and case-study uploads are public, matching the requested member access model. Equipment mutations require `authorizeLeader`, which verifies the bearer session through Supabase and accepts only the two confirmed admin emails. Public readers and ordinary patrol accounts cannot add equipment or alter its quantity/photo.
+
+Files have a streamed request bound, a 3 MiB binary limit and checked PDF/Word/image signatures; executable HTML/SVG content is refused. Case-study files are immutable and served as attachments with fixed MIME, `nosniff` and encoded filenames. Equipment images use the existing JPEG/PNG/WebP signature checks and a 450 KiB limit. Conditional ETag writes and explicit record versions protect updates; an identical retry is idempotent. Metadata excludes binary payloads and large kit contents; kits fetch their full JSON contents when listed. Public lists are paginated 20 records at a time. All data remains outside deployment output and counts toward the existing site's Netlify usage.
+
+The unit tests exercise the real handler and admin verifier with injected storage. Browser tests cover anonymous kits/studies, actual downloads, device-local incident drafts and DOCX/PDF generation, both admins and a denied patrol account, and fresh-browser equipment photos. These tests do not provision the production Netlify store; Netlify binds it automatically when the deployed functions first run.

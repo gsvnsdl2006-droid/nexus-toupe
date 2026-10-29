@@ -5,6 +5,8 @@ const sections = [
   "treasury",
   "secretary",
   "progress",
+  "firstaid",
+  "equipment",
   "photographer",
   "codes",
 ];

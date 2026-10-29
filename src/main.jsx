@@ -1,4 +1,6 @@
 import { cloneData } from "./browser-compat.js";
+import Secouriste from "./Secouriste";
+import Intendance from "./Intendance";
 import useNavigationHistory from "./useNavigationHistory";
 import BadgeMemoryPanel from "./BadgeMemoryPanel";
 import ProgressDashboard from "./ProgressDashboard";
@@ -57,6 +59,8 @@ import {
   Menu,
   Code2,
   Camera,
+  HeartPulse,
+  Package,
 } from "lucide-react";
 import {
   patrols,
@@ -402,6 +406,8 @@ function App() {
     treasury: "Une trésorerie bien tenue.",
     secretary: "Les souvenirs se construisent ici.",
     progress: "Chaque pas compte.",
+    firstaid: "Prendre soin de la patrouille.",
+    equipment: "Du matériel prêt pour chaque aventure.",
     photographer: "Les instants qui nous rassemblent.",
     codes: "Un message. Une clé. À toi de jouer.",
   };
@@ -751,11 +757,13 @@ function App() {
                 <span>{p.members.length}</span>
               </button>
             </div>
-            <div className="section-tabs mobile-dock">
+            <div className="section-tabs mobile-dock support-dock">
               {[
                 ["overview", "Vue d’ensemble", Compass],
                 ["treasury", "Trésorier", Wallet],
                 ["secretary", "Secrétariat", FileText],
+                ["firstaid", "Secouriste", HeartPulse],
+                ["equipment", "Intendance", Package],
                 ["progress", "Progression", Award],
                 ["photographer", "Photographe", Camera],
                 ["codes", "Codes", Code2],
@@ -777,6 +785,17 @@ function App() {
                 onSignIn={access.signInGoogle}
               />
             )}
+            {section === "firstaid" && (
+              <Secouriste key={patrol} patrol={patrol} />
+            )}
+            {section === "equipment" && (
+              <Intendance
+                key={patrol}
+                patrol={patrol}
+                user={access.user}
+                onSignIn={access.signInGoogle}
+              />
+            )}
             {section === "codes" && <Codes />}
             {section === "overview" && (
               <>
@@ -793,6 +812,18 @@ function App() {
                       "Secrétariat",
                       "Réunions, présences et dossier de camp.",
                       FileText,
+                    ],
+                    [
+                      "firstaid",
+                      "Secouriste",
+                      "Boîtes de secours, études de cas et rapports d’incident.",
+                      HeartPulse,
+                    ],
+                    [
+                      "equipment",
+                      "Intendance",
+                      "Le matériel, ses photos et ses quantités disponibles.",
+                      Package,
                     ],
                     [
                       "progress",

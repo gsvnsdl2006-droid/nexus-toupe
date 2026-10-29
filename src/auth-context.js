@@ -18,6 +18,8 @@ export function readLoginReturn() {
         "treasury",
         "secretary",
         "progress",
+        "firstaid",
+        "equipment",
         "photographer",
         "codes",
       ].includes(saved.section)
