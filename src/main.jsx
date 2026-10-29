@@ -372,13 +372,18 @@ function App() {
   const count = all.reduce((n, p) => n + p.members.length, 0);
   const meetings = all.reduce((n, p) => n + p.meetings.length, 0);
   const sum = totals(p ? p.transactions : all.flatMap((p) => p.transactions));
-  const activityKey = (value) =>
-    String(value || "Autres opérations")
+  const activityKey = (value) => {
+    const key = String(value || "Autres opérations")
       .normalize("NFD")
       .replace(/\p{M}/gu, "")
       .trim()
       .toLowerCase()
       .replace(/\s+/g, " ");
+    return key === "cooking competition" ? "concours cuisine" : key;
+  };
+  const activityName = (value) =>
+    activities.find((name) => activityKey(name) === activityKey(value)) ||
+    value;
   const treasuryActivities = [
     ...new Map(
       [
@@ -386,7 +391,7 @@ function App() {
         ...(p?.transactions || []).map(
           (t) => t.activity || "Autres opérations",
         ),
-      ].map((a) => [activityKey(a), a]),
+      ].map((a) => [activityKey(a), activityName(a)]),
     ).values(),
   ];
   const activityTransactions = (p?.transactions || []).filter(
@@ -1640,13 +1645,17 @@ function App() {
                       Activité
                       <select
                         name="activity"
-                        defaultValue={modal.transaction?.activity || activity}
+                        defaultValue={activityName(
+                          modal.transaction?.activity || activity,
+                        )}
                       >
                         {!activities.includes(
-                          modal.transaction?.activity || activity,
+                          activityName(modal.transaction?.activity || activity),
                         ) && (
                           <option>
-                            {modal.transaction?.activity || activity}
+                            {activityName(
+                              modal.transaction?.activity || activity,
+                            )}
                           </option>
                         )}
                         {activities.map((a) => (
