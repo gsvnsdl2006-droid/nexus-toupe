@@ -178,15 +178,18 @@ test("only the two server-verified admins can add equipment, photos or change qu
   const publicRead = createPatrolSupportHandler({ store: () => store });
   assert.equal((await publicRead(request("equipment", equipment))).status, 401);
   const equipmentList = await (await publicRead(list("equipment"))).json();
-  assert.equal(equipmentList.records[0].quantity, 5);
+  const custom = equipmentList.records.find((record) => record.id === id);
+  assert.equal(custom.quantity, 5);
   const photo = await publicRead(
-    new Request("https://app.test" + equipmentList.records[0].photo),
+    new Request("https://app.test" + custom.photo),
   );
   assert.equal(photo.headers.get("Content-Type"), "image/png");
   assert.ok((await photo.arrayBuffer()).byteLength > 8);
   assert.equal(
-    (await (await publicRead(list("equipment", 1))).json()).records.length,
-    0,
+    (await (await publicRead(list("equipment", 1))).json()).records.some(
+      (record) => record.id === id,
+    ),
+    false,
   );
 });
 test("incident Word export is a real downloadable document", async () => {
@@ -203,4 +206,56 @@ test("incident Word export is a real downloadable document", async () => {
   const bytes = Buffer.from(await blob.arrayBuffer());
   assert.equal(bytes.subarray(0, 2).toString(), "PK");
   assert.ok(bytes.length > 1000);
+});
+
+test("the 37 screenshot items start in each patrol; totals, names and later edits are preserved", async () => {
+  const { equipmentCatalogue } = await import(
+    "../netlify/lib/equipment-catalogue.js"
+  );
+  assert.equal(equipmentCatalogue.length, 37);
+  assert.equal(new Set(equipmentCatalogue.map((item) => item.id)).size, 37);
+  const quantities = Object.fromEntries(
+    equipmentCatalogue.map((item) => [item.name, item.quantity]),
+  );
+  assert.equal(quantities.Bansa, 3);
+  assert.equal(quantities.Chekouch, 5);
+  assert.equal(quantities.Ficel, null);
+  assert.equal(quantities["Trousse de secoure"], 1);
+  const store = supportStore(),
+    admin = createPatrolSupportHandler({
+      store: () => store,
+      authorizeAdmin: async () => ({ ok: true }),
+    });
+  let records = (await (await admin(list("equipment"))).json()).records;
+  assert.equal(records.length, 37);
+  const first = records.find((item) => item.name === "3en");
+  assert.equal(first.quantity, 2);
+  assert.ok(first.photoCrop);
+  const saved = await admin(
+    request("equipment", {
+      id: first.id,
+      name: first.name,
+      quantity: 9,
+      expectedVersion: first.version,
+    }),
+  );
+  assert.equal(saved.status, 201);
+  const reload = createPatrolSupportHandler({ store: () => store });
+  records = (await (await reload(list("equipment"))).json()).records;
+  assert.equal(records.length, 37);
+  assert.equal(records.find((item) => item.name === "3en").quantity, 9);
+  const other = (await (await reload(list("equipment", 1))).json()).records;
+  assert.equal(other.find((item) => item.name === "3en").quantity, 2);
+  assert.equal(
+    (await saved.json()).photo,
+    first.photo,
+    "a quantity edit retains the exact reference photograph",
+  );
+  const legacy = await admin(
+    request("equipment", { id, name: "Balta", quantity: 99, image: png }),
+  );
+  assert.equal(legacy.status, 201);
+  records = (await (await reload(list("equipment"))).json()).records;
+  assert.equal(records.filter((item) => item.name === "Balta").length, 1);
+  assert.equal(records.find((item) => item.name === "Balta").quantity, 99);
 });

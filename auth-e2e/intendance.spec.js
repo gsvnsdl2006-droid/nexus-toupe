@@ -41,20 +41,20 @@ for (const email of [
       .getByLabel("Nom du matériel", { exact: true })
       .fill("Tente de patrouille");
     await page.getByLabel("Quantité", { exact: true }).fill("3");
-    await page
-      .getByLabel("Photo du matériel", { exact: true })
-      .setInputFiles({
-        name: "tente.webp",
-        mimeType: "image/webp",
-        buffer: await readFile("public/branding/goelands.webp"),
-      });
+    await page.getByLabel("Photo du matériel", { exact: true }).setInputFiles({
+      name: "tente.webp",
+      mimeType: "image/webp",
+      buffer: await readFile("public/branding/goelands.webp"),
+    });
     await expect(page.locator(".support-photo-preview")).toBeVisible();
     await page
       .getByRole("button", { name: "Enregistrer le matériel", exact: true })
       .click();
-    await expect(page.locator(".equipment-card")).toContainText(
-      "Tente de patrouille",
-    );
+    await expect(
+      page
+        .locator(".equipment-card")
+        .filter({ hasText: "Tente de patrouille" }),
+    ).toContainText("Tente de patrouille");
     await page
       .getByRole("button", {
         name: "Modifier le matériel Tente de patrouille",
@@ -68,7 +68,12 @@ for (const email of [
     await page
       .getByRole("button", { name: "Enregistrer le matériel", exact: true })
       .click();
-    await expect(page.locator(".equipment-card strong")).toHaveText("6");
+    await expect(
+      page
+        .locator(".equipment-card")
+        .filter({ hasText: "Tente de patrouille" })
+        .locator("strong"),
+    ).toHaveText("6");
     const fresh = await browser.newContext({
       viewport: { width: 390, height: 844 },
     });
@@ -82,11 +87,22 @@ for (const email of [
     await other
       .getByRole("button", { name: "Intendance", exact: true })
       .click();
-    await expect(other.locator(".equipment-card strong")).toHaveText("6");
+    await expect(
+      other
+        .locator(".equipment-card")
+        .filter({ hasText: "Tente de patrouille" })
+        .locator("strong"),
+    ).toHaveText("6");
+    await other
+      .locator(".equipment-card")
+      .filter({ hasText: "Tente de patrouille" })
+      .scrollIntoViewIfNeeded();
     await expect
       .poll(() =>
         other
-          .locator(".equipment-card > img")
+          .locator(".equipment-card")
+          .filter({ hasText: "Tente de patrouille" })
+          .locator(":scope > img")
           .evaluate((img) => img.naturalWidth > 0),
       )
       .toBe(true);

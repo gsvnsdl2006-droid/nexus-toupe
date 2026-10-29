@@ -5,6 +5,7 @@ import { randomId, fetchWithTimeout } from "./browser-compat";
 import { isLeader } from "./leader-policy";
 import { compressEventPhoto } from "./photographer-images";
 import useSupportRecords from "./useSupportRecords";
+import EquipmentPhoto from "./EquipmentPhoto";
 import SupportFeedback from "./SupportFeedback";
 const fresh = () => ({
   id: randomId(),
@@ -30,7 +31,7 @@ export default function Intendance({ patrol, user, onSignIn }) {
       const current = await response.json();
       if (!response.ok) throw Error(current.error);
       let image = "";
-      if (current.photo) {
+      if (current.photo && !current.photoCrop) {
         const photo = await fetch(current.photo);
         if (!photo.ok) throw Error("Photo indisponible. Réessaie.");
         image = await new Promise((resolve, reject) => {
@@ -44,6 +45,13 @@ export default function Intendance({ patrol, user, onSignIn }) {
         id: current.id,
         name: current.name,
         quantity: current.quantity,
+        referencePhoto: current.photoCrop
+          ? {
+              photo: current.photo,
+              photoCrop: current.photoCrop,
+              name: current.name,
+            }
+          : null,
         image,
         expectedVersion: current.version,
       });
@@ -126,16 +134,29 @@ export default function Intendance({ patrol, user, onSignIn }) {
             Quantité
             <input
               type="number"
-              required
+              required={draft.quantity !== null}
               min="0"
               max="100000"
               step="1"
-              value={draft.quantity}
+              value={draft.quantity ?? ""}
               onChange={(e) =>
                 setDraft({ ...draft, quantity: Number(e.target.value) })
               }
-              disabled={state.saving || processing || opening}
+              disabled={
+                draft.quantity === null || state.saving || processing || opening
+              }
             />
+          </label>
+          <label className="equipment-no-quantity">
+            <input
+              type="checkbox"
+              checked={draft.quantity === null}
+              disabled={state.saving || processing || opening}
+              onChange={(e) =>
+                setDraft({ ...draft, quantity: e.target.checked ? null : 1 })
+              }
+            />{" "}
+            Sans quantité
           </label>
           <label>
             Photo du matériel
@@ -160,6 +181,12 @@ export default function Intendance({ patrol, user, onSignIn }) {
               }}
             />
           </label>
+          {!draft.image && draft.referencePhoto && (
+            <EquipmentPhoto
+              item={draft.referencePhoto}
+              className="support-photo-preview"
+            />
+          )}
           {draft.image && (
             <img
               className="support-photo-preview"
@@ -192,7 +219,7 @@ export default function Intendance({ patrol, user, onSignIn }) {
         {state.records.map((item) => (
           <article key={item.id} className="equipment-card">
             {item.photo ? (
-              <img src={item.photo} alt={item.name} loading="lazy" />
+              <EquipmentPhoto item={item} />
             ) : (
               <div className="equipment-placeholder">
                 <Package size={40} />
@@ -201,7 +228,13 @@ export default function Intendance({ patrol, user, onSignIn }) {
             <div>
               <h3>{item.name}</h3>
               <p>
-                Quantité disponible <strong>{item.quantity}</strong>
+                {item.quantity === null ? (
+                  "Sans quantité"
+                ) : (
+                  <>
+                    Quantité <strong>{item.quantity}</strong>
+                  </>
+                )}
               </p>
               {admin && (
                 <button

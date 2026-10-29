@@ -1,3 +1,4 @@
+import { equipmentCatalogue } from "./equipment-catalogue.js";
 import { createHash } from "node:crypto";
 import { validateImage } from "./badge-images.js";
 const endpoint = "/.netlify/functions/patrol-support";
@@ -47,9 +48,39 @@ function fileData(file) {
   else if (!signatures[mime]) throw Error("invalid");
   return { bytes, mime, name: file.name };
 }
+const nameKey = (name) => String(name).trim().toLowerCase();
+const referenceFor = (record) =>
+  equipmentCatalogue.find(
+    (item) => item.id === record.seedPhotoId || item.id === record.id,
+  ) ||
+  equipmentCatalogue.find(
+    (item) => nameKey(item.name) === nameKey(record.name),
+  );
+function seededRecord(item, patrol) {
+  const record = {
+    id: item.id,
+    name: item.name,
+    quantity: item.quantity,
+    patrol: Number(patrol),
+    section: "equipment",
+    seedPhotoId: item.id,
+    updatedAt: "2026-10-30",
+  };
+  record.version = createHash("sha256")
+    .update(JSON.stringify(record))
+    .digest("hex");
+  return record;
+}
 function publicRecord(record) {
   const { image, file, ...info } = record;
   const query = `${endpoint}?patrol=${record.patrol}&section=${record.section}&id=${record.id}`;
+  if (!image && !info.photo && record.section === "equipment") {
+    const reference = referenceFor(record);
+    if (reference) {
+      info.photo = reference.photo;
+      info.photoCrop = reference.photoCrop;
+    }
+  }
   if (image) info.photo = `${query}&asset=image&version=${record.version}`;
   if (file) info.file = { name: file.name, url: `${query}&asset=file` };
   return info;
@@ -90,7 +121,12 @@ export function createPatrolSupportHandler({
       if (request.method === "GET") {
         if (id !== null) {
           if (!idValid(id)) return json({ error: "Fiche invalide." }, 400);
-          const record = await store().get(prefix + id, { type: "json" });
+          const stored = await store().get(prefix + id, { type: "json" });
+          const seed =
+            section === "equipment"
+              ? equipmentCatalogue.find((item) => item.id === id)
+              : null;
+          const record = stored || (seed ? seededRecord(seed, patrol) : null);
           if (!record) return json({ error: "Fiche introuvable." }, 404);
           if (url.searchParams.get("asset") === "image" && record.image) {
             if (url.searchParams.get("version") !== record.version)
@@ -129,6 +165,30 @@ export function createPatrolSupportHandler({
         const listing = await store().list({ prefix });
         const keys = listing.blobs.sort((a, b) => a.key.localeCompare(b.key)),
           start = Number(cursor);
+        if (section === "equipment") {
+          const saved = (
+            await Promise.all(
+              keys.map(
+                async ({ key }) =>
+                  (await store().getMetadata(key))?.metadata?.record,
+              ),
+            )
+          ).filter(Boolean);
+          const ids = new Set(saved.map((record) => record.id)),
+            names = new Set(saved.map((record) => nameKey(record.name)));
+          const records = [
+            ...equipmentCatalogue
+              .filter(
+                (item) => !ids.has(item.id) && !names.has(nameKey(item.name)),
+              )
+              .map((item) => publicRecord(seededRecord(item, patrol))),
+            ...saved.map((record) => publicRecord(record)),
+          ].sort((a, b) => a.name.localeCompare(b.name, "fr"));
+          return json({
+            records: records.slice(start, start + 50),
+            cursor: start + 50 < records.length ? String(start + 50) : null,
+          });
+        }
         const records = (
           await Promise.all(
             keys.slice(start, start + 20).map(async ({ key }) => {
@@ -215,7 +275,7 @@ export function createPatrolSupportHandler({
         }));
       }
       if (section === "equipment") {
-        if (!quantity(input.quantity))
+        if (input.quantity !== null && !quantity(input.quantity))
           return json(
             { error: "La quantité doit être un nombre entier positif ou nul." },
             400,
@@ -248,17 +308,27 @@ export function createPatrolSupportHandler({
         }
         payload.file = { name: input.file.name, data: input.file.data };
       }
-      const version = createHash("sha256")
-        .update(JSON.stringify(payload))
-        .digest("hex");
       const previous = await store().getWithMetadata(prefix + input.id, {
         type: "json",
       });
-      if (previous?.data.version === version)
-        return json(publicRecord(previous.data));
+      const seed =
+        section === "equipment"
+          ? equipmentCatalogue.find((item) => item.id === input.id)
+          : null;
+      const previousData =
+        previous?.data || (seed ? seededRecord(seed, patrol) : null);
+      if (section === "equipment") {
+        const reference = referenceFor(previousData || payload);
+        if (reference) payload.seedPhotoId = reference.id;
+      }
+      const version = createHash("sha256")
+        .update(JSON.stringify(payload))
+        .digest("hex");
+      if (previousData?.version === version)
+        return json(publicRecord(previousData));
       if (
-        previous &&
-        (section === "cases" || input.expectedVersion !== previous.data.version)
+        previousData &&
+        (section === "cases" || input.expectedVersion !== previousData.version)
       )
         return json(
           {

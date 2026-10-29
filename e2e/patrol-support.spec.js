@@ -131,8 +131,6 @@ test("public first aid kits and case studies are shared; incident drafts stay lo
   await expect(
     other.getByRole("button", { name: "Ajouter du matériel", exact: true }),
   ).toHaveCount(0);
-  await expect(
-    other.getByText("Aucun matériel enregistré pour cette patrouille."),
-  ).toBeVisible();
+  await expect(other.locator(".equipment-card")).toHaveCount(37);
   await fresh.close();
 });
