@@ -28,7 +28,7 @@ test("removing a member retains named historical attendance and export membershi
     false,
   );
 });
-test("PostgreSQL RLS and deletion trigger permit only the two leaders to remove members/events", async () => {
+test("PostgreSQL RLS and deletion trigger permit only the two leaders to remove members/events/camp dossiers", async () => {
   const db = new PGlite();
   try {
     await db.exec(
@@ -43,14 +43,32 @@ test("PostgreSQL RLS and deletion trigger permit only the two leaders to remove 
         "utf8",
       ),
     );
+    await db.exec(
+      await readFile(
+        new URL("../supabase/camp-deletion.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    assert.equal(
+      await readFile(
+        new URL("../public/setup/camp-deletion.sql", import.meta.url),
+        "utf8",
+      ),
+      await readFile(
+        new URL("../supabase/camp-deletion.sql", import.meta.url),
+        "utf8",
+      ),
+    );
     const original = {
       members: [{ id: "member", name: "Scout" }],
       meetings: [
         { id: "event", title: "Réunion", attendance: { member: "present" } },
       ],
       transactions: [],
-      camp: {},
-      camps: [],
+      camp: { "Camp original": { A1: "Souvenir" } },
+      camps: [
+        { id: "camp-a", title: "Camp été", fields: { title: "Camp été" } },
+      ],
     };
     async function reset() {
       await db.exec(`reset role;set request.jwt.claims='{}';`);
@@ -75,6 +93,14 @@ test("PostgreSQL RLS and deletion trigger permit only the two leaders to remove 
         (await db.query("select public.leader_deletion_enabled() as ready"))
           .rows[0].ready,
         true,
+      );
+      assert.equal(
+        (await db.query("select public.camp_deletion_enabled() as ready"))
+          .rows[0].ready,
+        true,
+      );
+      await db.exec(
+        `update public.patrol_records set payload=jsonb_set(jsonb_set(payload,'{camps}','[]'),'{camp}','{}') where patrol='Goélands'`,
       );
       await db.exec(
         `update public.patrol_records set payload=jsonb_set(jsonb_set(payload,'{members}','[]'),'{meetings}','[]') where patrol='Goélands'`,
@@ -103,6 +129,11 @@ test("PostgreSQL RLS and deletion trigger permit only the two leaders to remove 
       `jsonb_set(payload,'{meetings}','[]')`,
       `jsonb_set(payload,'{members,0,id}','"replacement-id"')`,
       `payload-'members'`,
+      `jsonb_set(payload,'{camps}','[]')`,
+      `payload-'camps'`,
+      `jsonb_set(payload,'{camps,0,id}','"new-camp-id"')`,
+      `jsonb_set(payload,'{camp}','{}')`,
+      `payload-'camp'`,
     ])
       await assert.rejects(
         () =>
@@ -111,6 +142,14 @@ test("PostgreSQL RLS and deletion trigger permit only the two leaders to remove 
           ),
         (e) => e.code === "42501",
       );
+    assert.equal(
+      (await db.query("select public.camp_deletion_enabled() as ready")).rows[0]
+        .ready,
+      false,
+    );
+    await db.exec(
+      `update public.patrol_records set payload=jsonb_set(payload,'{camps,0,title}','"Camp renommé"') where patrol='Goélands'`,
+    );
     await db.exec("reset role");
     await login("outsider@gmail.com");
     assert.equal(

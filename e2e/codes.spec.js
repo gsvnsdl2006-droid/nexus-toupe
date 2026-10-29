@@ -6,7 +6,7 @@ test("Codes matches Nexus AI: instant transforms, custom keys, decoding, mapping
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
-  await page.locator(".codes-entry").click();
+  await page.getByRole("button", { name: /Atelier des codes Morse/ }).click();
   await expect(
     page.getByRole("heading", { name: "Atelier des codes", exact: true }),
   ).toBeVisible();
@@ -59,7 +59,7 @@ test("Codes matches Nexus AI: instant transforms, custom keys, decoding, mapping
     .getByRole("button", { name: "Toutes les patrouilles", exact: true })
     .click();
   await expect(page.locator(".patrol-card")).toHaveCount(6);
-  await page.locator(".codes-entry").click();
+  await page.getByRole("button", { name: /Atelier des codes Morse/ }).click();
   await expect(page.getByLabel("Phrase à coder", { exact: true })).toHaveValue(
     "ABC XYZ",
   );

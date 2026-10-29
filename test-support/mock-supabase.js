@@ -83,6 +83,8 @@ export async function mock(page, allowed, options = {}) {
       if (url.includes("/auth/v1/user")) return json(user());
       if (url.includes("/rest/v1/patrol_access"))
         return json(allowed.map((patrol) => ({ patrol })));
+      if (url.includes("/rest/v1/rpc/camp_deletion_enabled"))
+        return json(options.campDeletionReady !== false);
       if (url.includes("/rest/v1/rpc/leader_deletion_enabled"))
         return json(options.deletionReady !== false);
       if (url.includes("/rest/v1/patrol_records")) {

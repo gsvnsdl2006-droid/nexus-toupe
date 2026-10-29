@@ -27,3 +27,9 @@ Run `leader-deletion.sql` once in the existing project's SQL Editor, then refres
 Only `gsvnsdl2006@gmail.com` and `troupeoriongsvn@gmail.com` see the delete controls. The controls remain disabled until the server confirms that the database deletion guard exists. A PostgreSQL trigger rejects removal or replacement of existing member/event IDs by any other authenticated account, including direct JSON API updates. Normal authorized edits remain allowed. Leaders confirm deletion; removing a member preserves that member's name in historical meeting attendance and Word/Excel attendance exports. Removing a meeting removes its attendance from statistics.
 
 Local PostgreSQL tests execute the actual setup and migration using PGlite, with authenticated JWT claim fixtures and RLS roles. Browser tests cover both leaders, a patrol account and a missing migration. Passing these tests does not apply the migration to the live project.
+
+## Admin-only camp dossier deletion
+
+Run [camp-deletion.sql](camp-deletion.sql) once in the existing project's SQL Editor, then refresh. It preserves all current records and access grants, and adds a separate trigger that rejects removal/replacement of camp dossier IDs or removal of legacy workbook sheets by patrol accounts. Both confirmed troop admins can delete a complete simplified dossier or the legacy workbook after confirmation. Authorized users can still fill in and edit camp fields.
+
+`camp_deletion_enabled()` verifies the caller and the installed trigger. Buttons remain disabled until the server confirms it is installed; member/meeting deletion retains its existing, separate migration. The app supplies a download of the exact SQL at `/setup/camp-deletion.sql`. Database tests run both migrations with real PostgreSQL roles and RLS; those tests do not apply SQL to production.

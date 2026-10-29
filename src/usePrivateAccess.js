@@ -13,7 +13,8 @@ export default function usePrivateAccess(
     [loading, setLoading] = useState(Boolean(accessClient)),
     [status, setStatus] = useState(""),
     [authError, setAuthError] = useState(loginReturnError),
-    [deletionReady, setDeletionReady] = useState(false);
+    [deletionReady, setDeletionReady] = useState(false),
+    [campDeletionReady, setCampDeletionReady] = useState(false);
   const revisions = useRef(new Map()),
     pending = useRef(new Map()),
     writing = useRef(false),
@@ -46,6 +47,7 @@ export default function usePrivateAccess(
   useEffect(() => {
     let active = true;
     setDeletionReady(false);
+    setCampDeletionReady(false);
     if (!ready) return;
     if (!accessClient || !user) {
       setAllowed([]);
@@ -61,8 +63,14 @@ export default function usePrivateAccess(
       const names = a.data.map((x) => x.patrol);
       setAllowed(names);
       if (isLeader(user)) {
-        const check = await accessClient.rpc("leader_deletion_enabled");
-        if (active) setDeletionReady(!check.error && check.data === true);
+        const [check, campCheck] = await Promise.all([
+          accessClient.rpc("leader_deletion_enabled"),
+          accessClient.rpc("camp_deletion_enabled"),
+        ]);
+        if (active) {
+          setDeletionReady(!check.error && check.data === true);
+          setCampDeletionReady(!campCheck.error && campCheck.data === true);
+        }
       }
       if (patrol && names.includes(patrol)) {
         const r = await accessClient
@@ -152,6 +160,12 @@ export default function usePrivateAccess(
       deletionReady &&
       !loading,
     deletionReady,
+    campDeletionReady,
+    canDeleteCamps:
+      isLeader(user) &&
+      allowed.includes(patrol) &&
+      campDeletionReady &&
+      !loading,
     saving: writing.current,
     authError,
     signInGoogle: async () => {

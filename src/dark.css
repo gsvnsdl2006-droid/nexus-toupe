@@ -2963,21 +2963,368 @@ input[type="file"] {
   }
 }
 
-.memory-download-ready { display: grid; gap: 12px; min-width: 0; }
-.memory-download-ready > a { display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; text-align: center; }
-.memory-download-ready > button { white-space: normal; }
+.memory-download-ready {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.memory-download-ready > a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  text-align: center;
+}
+.memory-download-ready > button {
+  white-space: normal;
+}
 
-.progress-member-profile { display: flex; align-items: center; gap: 18px; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--accent-line); }
-.progress-member-profile > img, .progress-member-initials { width: 88px; height: 96px; flex-shrink: 0; border-radius: 12px; border: 2px solid var(--accent-line); background: #10291b; }
-.progress-member-profile > img { object-fit: contain; }
-.progress-member-initials { display: grid; place-items: center; font-size: 28px; color: var(--accent); }
-.progress-member-profile > div:last-child { min-width: 0; }
-.progress-member-profile h3 { margin: 10px 0; overflow-wrap: anywhere; font-size: 24px; }
-.progress-member-profile p { color: #cee0bb; font-size: 13px; line-height: 1.6; margin: 0; }
+.progress-member-profile {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--accent-line);
+}
+.progress-member-profile > img,
+.progress-member-initials {
+  width: 88px;
+  height: 96px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: 2px solid var(--accent-line);
+  background: #10291b;
+}
+.progress-member-profile > img {
+  object-fit: contain;
+}
+.progress-member-initials {
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  color: var(--accent);
+}
+.progress-member-profile > div:last-child {
+  min-width: 0;
+}
+.progress-member-profile h3 {
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+  font-size: 24px;
+}
+.progress-member-profile p {
+  color: #cee0bb;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
 @media (max-width: 480px) {
-  .progress-member-profile { flex-direction: row; text-align: left; gap: 14px; }
-  .progress-member-profile > img, .progress-member-initials { width: 64px; height: 76px; }
-  .progress-member-profile h3 { font-size: 19px; margin: 6px 0; }
-  .progress-member-profile .eyebrow { font-size: 9px; letter-spacing: 1px; }
-  .progress-member-profile p { font-size: 11px; }
+  .progress-member-profile {
+    flex-direction: row;
+    text-align: left;
+    gap: 14px;
+  }
+  .progress-member-profile > img,
+  .progress-member-initials {
+    width: 64px;
+    height: 76px;
+  }
+  .progress-member-profile h3 {
+    font-size: 19px;
+    margin: 6px 0;
+  }
+  .progress-member-profile .eyebrow {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+  .progress-member-profile p {
+    font-size: 11px;
+  }
+}
+
+/* Public patrol photo albums */
+.photographer {
+  margin: 26px 0;
+  min-width: 0;
+}
+.photo-heading,
+.photo-toolbar,
+.photo-form-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.photo-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  font-size: clamp(26px, 4vw, 40px);
+  margin: 12px 0;
+}
+.photo-heading p,
+.photo-event-title p {
+  color: #b6c9ad;
+  line-height: 1.6;
+}
+.photo-toolbar {
+  margin: 26px 0;
+  justify-content: flex-start;
+  align-items: flex-end;
+}
+.photo-toolbar label {
+  min-width: 180px;
+}
+.photo-event-form {
+  border: 1px solid var(--accent-line, #48633e);
+  background: linear-gradient(140deg, #203c28, #10291c);
+  border-radius: 18px;
+  padding: 25px;
+  margin: 24px 0;
+}
+.photo-form-title h3 {
+  margin: 0 0 18px;
+}
+.photo-fields {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 18px;
+}
+.photo-fields label {
+  min-width: 0;
+}
+.photo-upload-zone {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px dashed #8ba675;
+  border-radius: 14px;
+  padding: 24px 16px;
+  margin: 20px 0;
+  background: #8ba6750c;
+  text-align: center;
+}
+.photo-upload-zone span {
+  color: #b5c6aa;
+  font-size: 12px;
+}
+.photo-upload-zone input {
+  width: 100%;
+  max-width: 340px;
+  font-size: 12px;
+}
+.photo-selection {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.photo-selection > div {
+  position: relative;
+}
+.photo-selection img {
+  width: 100%;
+  height: 130px;
+  object-fit: contain;
+  background: #0e251a;
+  border-radius: 10px;
+}
+.photo-selection button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: #12251df0;
+  padding: 7px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.photo-events {
+  display: grid;
+  gap: 24px;
+  margin: 24px 0;
+}
+.photo-event-card {
+  background: #142e1f;
+  border: 1px solid #39533b;
+  border-radius: 17px;
+  overflow: hidden;
+}
+.photo-event-title {
+  padding: 22px 24px 14px;
+}
+.photo-event-title h3 {
+  margin: 10px 0;
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+.photo-event-title p {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  font-size: 12px;
+  margin: 0;
+}
+.photo-event-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+}
+.photo-event-grid button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #0d2318;
+}
+.photo-event-grid img {
+  display: block;
+  width: 100%;
+  height: 260px;
+  object-fit: contain;
+}
+.photo-empty {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  padding: 45px 20px;
+  border: 1px dashed #48633e;
+  border-radius: 18px;
+  color: #c1d1ad;
+}
+.photo-empty h3 {
+  font-size: 21px;
+}
+.photo-empty p {
+  margin: 0;
+  line-height: 1.7;
+}
+.photo-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #cfe4ae;
+  background: #24452a;
+  padding: 16px;
+  border-radius: 10px;
+  line-height: 1.7;
+}
+.photo-notice svg {
+  flex-shrink: 0;
+}
+.photo-error {
+  color: #ffcfbf;
+  padding: 16px;
+  border: 1px solid #855b42;
+  border-radius: 10px;
+  line-height: 1.8;
+}
+.photo-error button {
+  margin-left: 12px;
+}
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #04120af5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 65px 20px 30px;
+}
+.photo-lightbox > img {
+  max-width: 100%;
+  max-height: 75dvh;
+  object-fit: contain;
+}
+.photo-lightbox > button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+.photo-lightbox > p {
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+@media (max-width: 760px) {
+  .mobile-dock {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .mobile-dock button {
+    font-size: 8px;
+    overflow-wrap: anywhere;
+  }
+  .photo-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .photo-heading > button {
+    width: 100%;
+  }
+  .photo-toolbar {
+    gap: 10px;
+  }
+  .photo-toolbar label {
+    min-width: 0;
+    flex: 1;
+  }
+  .photo-toolbar button {
+    font-size: 11px;
+    padding: 12px;
+  }
+  .photo-event-form {
+    padding: 18px 14px;
+  }
+  .photo-fields {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .photo-selection {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .photo-event-title {
+    padding: 20px 16px 12px;
+  }
+  .photo-event-grid img {
+    height: 160px;
+  }
+  .photo-event-form > .primary {
+    width: 100%;
+    font-size: 12px;
+  }
+  .photo-error button {
+    display: block;
+    margin: 12px 0 0;
+  }
+}
+.camp-folder-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.camp-folder-row .camp-folder {
+  width: 100%;
+  flex: 1;
+}
+.camp-folder-row > .delete-action {
+  align-self: flex-end;
+}
+.camp-heading {
+  flex-wrap: wrap;
+}
+.camp-heading .delete-action,
+.legacy-camp .delete-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.legacy-camp .delete-action {
+  margin: 10px 0 0 10px;
 }

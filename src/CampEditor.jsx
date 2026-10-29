@@ -6,6 +6,7 @@ import {
   Check,
   FolderOpen,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { campCategories, createCamp } from "./camp";
 import { uid, today } from "./model";
@@ -17,6 +18,11 @@ export default function CampEditor({
   download,
   downloadLegacy,
   status,
+  isLeader = false,
+  canDelete = false,
+  deletionReady = false,
+  deleteCamp,
+  deleteLegacy,
 }) {
   const [selected, select] = useState(null),
     [category, choose] = useState(null),
@@ -66,6 +72,16 @@ export default function CampEditor({
           </button>
         )}
       </div>
+      {isLeader && !deletionReady && (
+        <p className="deletion-setup">
+          La suppression des dossiers attend l’activation de la protection
+          Supabase.{" "}
+          <a href="/setup/camp-deletion.sql" download>
+            Télécharger la mise à jour SQL
+          </a>{" "}
+          à exécuter une fois dans le SQL Editor, puis actualiser la page.
+        </p>
+      )}
       {creating && (
         <form
           className="camp-create"
@@ -116,31 +132,43 @@ export default function CampEditor({
             </div>
           )}
           {camps.map((c) => (
-            <button
-              className="camp-folder"
-              key={c.id}
-              onClick={() => {
-                select(c.id);
-                choose(null);
-              }}
-            >
-              <FolderOpen />
-              <div>
-                <h3>{c.fields.title || c.title}</h3>
-                <small>
-                  {
-                    campCategories.filter((cat) =>
-                      cat.fields.some(
-                        ([k]) =>
-                          k !== "title" && String(c.fields[k] ?? "").trim(),
-                      ),
-                    ).length
-                  }{" "}
-                  / {campCategories.length} catégories commencées
-                </small>
-              </div>
-              <ChevronRight size={18} />
-            </button>
+            <div className="camp-folder-row" key={c.id}>
+              <button
+                className="camp-folder"
+                onClick={() => {
+                  select(c.id);
+                  choose(null);
+                }}
+              >
+                <FolderOpen />
+                <div>
+                  <h3>{c.fields.title || c.title}</h3>
+                  <small>
+                    {
+                      campCategories.filter((cat) =>
+                        cat.fields.some(
+                          ([k]) =>
+                            k !== "title" && String(c.fields[k] ?? "").trim(),
+                        ),
+                      ).length
+                    }{" "}
+                    / {campCategories.length} catégories commencées
+                  </small>
+                </div>
+                <ChevronRight size={18} />
+              </button>
+              {isLeader && (
+                <button
+                  type="button"
+                  className="delete-action"
+                  aria-label={`Supprimer le dossier ${c.fields.title || c.title}`}
+                  disabled={!canDelete}
+                  onClick={() => deleteCamp?.(c)}
+                >
+                  <Trash2 size={15} /> Supprimer
+                </button>
+              )}
+            </div>
           ))}
         </div>
       ) : (
@@ -163,6 +191,23 @@ export default function CampEditor({
               <Download size={16} />
               Télécharger Excel
             </button>
+            {isLeader && (
+              <button
+                type="button"
+                className="delete-action"
+                disabled={!canDelete}
+                aria-label={`Supprimer le dossier ${camp.fields.title || camp.title}`}
+                onClick={() => {
+                  if (deleteCamp?.(camp)) {
+                    select(null);
+                    choose(null);
+                    setDirty(false);
+                  }
+                }}
+              >
+                <Trash2 size={15} /> Supprimer ce dossier
+              </button>
+            )}
           </div>
           {status}
           {!category ? (
@@ -249,6 +294,17 @@ export default function CampEditor({
             <Download size={16} />
             Télécharger l’ancien dossier
           </button>
+          {isLeader && (
+            <button
+              type="button"
+              className="delete-action"
+              disabled={!canDelete}
+              onClick={() => deleteLegacy?.()}
+              aria-label="Supprimer l’ancien dossier"
+            >
+              <Trash2 size={15} /> Supprimer l’ancien dossier
+            </button>
+          )}
         </div>
       )}
     </div>

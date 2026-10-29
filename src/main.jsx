@@ -4,6 +4,7 @@ import { recoverPhotos } from "./photo-vault";
 import useBadgePhotos from "./useBadgePhotos";
 import { removeMember, attendanceMembers } from "./leader-policy";
 import Codes from "./Codes";
+import Photographer from "./Photographer";
 import { readLoginReturn } from "./auth-context";
 import AccessGate from "./AccessGate";
 import usePrivateAccess from "./usePrivateAccess";
@@ -53,6 +54,7 @@ import {
   CheckCircle2,
   Menu,
   Code2,
+  Camera,
 } from "lucide-react";
 import {
   patrols,
@@ -313,6 +315,7 @@ function App() {
     treasury: "Une trésorerie bien tenue.",
     secretary: "Les souvenirs se construisent ici.",
     progress: "Chaque pas compte.",
+    photographer: "Les instants qui nous rassemblent.",
     codes: "Un message. Une clé. À toi de jouer.",
   };
   return (
@@ -332,7 +335,11 @@ function App() {
         </button>
         <nav>
           <button
-            className={!patrol && section !== "codes" ? "selected" : ""}
+            className={
+              !patrol && !["codes", "photographer"].includes(section)
+                ? "selected"
+                : ""
+            }
             onClick={goHome}
           >
             Les patrouilles
@@ -343,6 +350,15 @@ function App() {
             }}
           >
             Archives & exports <ArrowUpRight size={14} />
+          </button>
+          <button
+            className={section === "photographer" ? "selected" : ""}
+            onClick={() => {
+              selectPatrol(null);
+              setSection("photographer");
+            }}
+          >
+            Photographe
           </button>
           <button
             className={section === "codes" ? "selected" : ""}
@@ -378,7 +394,14 @@ function App() {
       </header>
       <main data-patrol={patrol ? patrols.indexOf(patrol) : undefined}>
         <div className="drive-toolbar">
-          {inlineSaveStatus}
+          {section === "photographer" ? (
+            <div className="inline-save-status">
+              <Cloud size={16} /> Album public · les événements publiés sont
+              conservés en ligne.
+            </div>
+          ) : (
+            inlineSaveStatus
+          )}
           <button className="secondary" onClick={() => setModal("settings")}>
             Mes exports
           </button>
@@ -387,20 +410,25 @@ function App() {
           <span>ESPACE TROUPE</span>
           <ChevronRight size={12} />
           <span>
-            {patrol || (section === "codes" ? "CODES" : "TABLEAU DE BORD")}
+            {patrol ||
+              (section === "codes"
+                ? "CODES"
+                : section === "photographer"
+                  ? "PHOTOGRAPHE"
+                  : "TABLEAU DE BORD")}
           </span>
           <span className="local-status">
             <CheckCircle2 size={13} />
-            {saveState}
+            {section === "photographer" ? "Album public" : saveState}
           </span>
         </div>
-        {!patrol && section === "codes" ? (
+        {!patrol && ["codes", "photographer"].includes(section) ? (
           <>
             <button className="back" onClick={goHome}>
               <ArrowLeft size={16} />
               Toutes les patrouilles
             </button>
-            <Codes />
+            {section === "photographer" ? <Photographer /> : <Codes />}
           </>
         ) : !patrol ? (
           <>
@@ -506,6 +534,17 @@ function App() {
                 </div>
               </div>
             </section>
+            <button
+              className="codes-entry"
+              onClick={() => setSection("photographer")}
+            >
+              <Camera size={26} />
+              <span>
+                <strong>Photographe</strong>
+                <small>Les événements et souvenirs des patrouilles</small>
+              </span>
+              <ArrowUpRight size={21} />
+            </button>
             <button className="codes-entry" onClick={() => setSection("codes")}>
               <Code2 size={26} />
               <span>
@@ -619,6 +658,7 @@ function App() {
                 ["treasury", "Trésorier", Wallet],
                 ["secretary", "Secrétariat", FileText],
                 ["progress", "Progression", Award],
+                ["photographer", "Photographe", Camera],
                 ["codes", "Codes", Code2],
               ].map(([key, label, Icon]) => (
                 <button
@@ -631,6 +671,7 @@ function App() {
                 </button>
               ))}
             </div>
+            {section === "photographer" && <Photographer patrol={patrol} />}
             {section === "codes" && <Codes />}
             {section === "overview" && (
               <>
@@ -982,6 +1023,39 @@ function App() {
                     camps={p.camps || []}
                     legacy={p.camp}
                     status={inlineSaveStatus}
+                    isLeader={access.isLeader}
+                    canDelete={access.canDeleteCamps && !access.saving && !busy}
+                    deletionReady={access.campDeletionReady}
+                    deleteCamp={(camp) => {
+                      if (!access.canDeleteCamps || access.saving || busy)
+                        return false;
+                      if (
+                        !confirm(
+                          `Supprimer définitivement le dossier « ${camp.fields.title || camp.title} » et toutes ses catégories ?`,
+                        )
+                      )
+                        return false;
+                      patch((p) => {
+                        p.camps = (p.camps || []).filter(
+                          (c) => c.id !== camp.id,
+                        );
+                      });
+                      return true;
+                    }}
+                    deleteLegacy={() => {
+                      if (!access.canDeleteCamps || access.saving || busy)
+                        return false;
+                      if (
+                        !confirm(
+                          "Supprimer définitivement l’ancien dossier de camp ? Téléchargez une copie avant de continuer si vous souhaitez le conserver.",
+                        )
+                      )
+                        return false;
+                      patch((p) => {
+                        p.camp = {};
+                      });
+                      return true;
+                    }}
                     save={(camp) =>
                       patch((p) => {
                         p.camps ??= [];

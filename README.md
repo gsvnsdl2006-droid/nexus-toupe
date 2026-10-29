@@ -68,3 +68,9 @@ Each member can download a designed, personalized badge PDF with the badge title
 ## Phone home-screen icon
 
 The web manifest and iOS touch icon use the green Nexus/Orion artwork: Nexus lettering, the Orion archer replacing the central cross, and green orbital accents. Android has a separate padded maskable icon. Existing saved shortcuts may retain an OS-cached icon: remove and add the shortcut again to pick up the new artwork. The manifest does not claim offline app startup; it supplies shortcut branding and standalone display.
+
+## Public photographer albums and camp deletion
+
+**Photographe**, before Codes, is public on the home page and in every patrol. Anyone can publish an event/date and 1–4 photos without signing in. Albums use the existing site's Netlify Blobs store outside deployment files; source images are compressed, local drafts survive reloads and retrying a publication cannot overwrite an existing album. See [netlify/README.md](netlify/README.md) for storage, API, pagination and live-verification details. No new setup is required for photo albums.
+
+The two troop admins can also delete simplified camp dossiers and the legacy camp workbook. Enable the server protection once with [supabase/camp-deletion.sql](supabase/camp-deletion.sql) in the existing Supabase SQL Editor. The app offers the same SQL file for download and keeps deletion disabled until the server verifies the guard. No API keys or Google provider changes are needed.
