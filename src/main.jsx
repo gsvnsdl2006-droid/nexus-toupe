@@ -1,3 +1,4 @@
+import { cloneData } from "./browser-compat.js";
 import useNavigationHistory from "./useNavigationHistory";
 import BadgeMemoryPanel from "./BadgeMemoryPanel";
 import ProgressDashboard from "./ProgressDashboard";
@@ -106,23 +107,22 @@ function App() {
   dataRef.current = data;
   const access = usePrivateAccess(
     patrol,
-    async (payload) => {
+    async (payload, targetPatrol = patrol) => {
       const current = dataRef.current;
       if (!current) return;
-      const previous = privatePayload(current.patrols[patrol]);
-      if (JSON.stringify(previous) !== JSON.stringify(payload)) {
-        const key = `nexus-private-backup-${patrol}`;
-        const history = (await get(key)) || [];
-        await set(
-          key,
-          [{ date: Date.now(), payload: previous }, ...history].slice(0, 3),
-        );
-      }
-      const latest = dataRef.current;
-      if (!latest) return;
-      const next = structuredClone(latest);
-      Object.assign(next.patrols[patrol], payload);
+      const previous = privatePayload(current.patrols[targetPatrol]);
+      if (JSON.stringify(previous) === JSON.stringify(payload)) return;
+      // Commit before asynchronous backup writes so a newer local edit cannot
+      // be overwritten by the acknowledgement of an older save.
+      const next = cloneData(current);
+      Object.assign(next.patrols[targetPatrol], payload);
       replaceData(next);
+      const key = `nexus-private-backup-${targetPatrol}`;
+      const history = (await get(key)) || [];
+      await set(
+        key,
+        [{ date: Date.now(), payload: previous }, ...history].slice(0, 3),
+      );
     },
     section,
     Boolean(data),
@@ -170,17 +170,25 @@ function App() {
     return persistSnapshot(next);
   }
   useEffect(() => {
-    sessionStorage.removeItem("nexus-drive-session");
-    get("nexus-data")
+    try {
+      sessionStorage.removeItem("nexus-drive-session");
+    } catch {}
+    Promise.resolve()
+      .then(() => get("nexus-data"))
       .then(async (d) => {
         const restored = await recoverPhotos(d || initial());
         if (restored.badges?.every((b) => b.includes("à nommer")))
           restored.badges = [...officialBadges];
         await replaceData(restored);
       })
-      .catch(() =>
-        setNotice("Impossible de lire les données locales. Rechargez la page."),
-      );
+      .catch(() => {
+        const fallback = initial();
+        dataRef.current = fallback;
+        setData(fallback);
+        setNotice(
+          "Stockage local indisponible sur ce navigateur. Les espaces partagés et les albums restent accessibles en ligne.",
+        );
+      });
   }, []);
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -192,7 +200,7 @@ function App() {
   function update(fn) {
     const previous = dataRef.current;
     if (!previous) return;
-    const next = structuredClone(previous);
+    const next = cloneData(previous);
     fn(next);
     next.updated = Math.max(Date.now(), (previous.updated || 0) + 1);
     replaceData(next);
@@ -206,7 +214,7 @@ function App() {
       JSON.stringify(privatePayload(next.patrols[patrol])) !==
         JSON.stringify(previous)
     )
-      access.save(next.patrols[patrol]);
+      access.save(next.patrols[patrol], previous);
   }
   async function workbook(kind, name, snapshot = data) {
     const p = snapshot.patrols[name];
@@ -250,8 +258,49 @@ function App() {
     <div className="inline-save-status" role="status">
       <CheckCircle2 size={17} />
       <span>
-        {saveState}. Téléchargez vos documents pour les déposer sur Drive.
+        {access.authorized
+          ? access.status || "Chargement de l’espace partagé…"
+          : `${saveState}. Téléchargez vos documents pour les déposer sur Drive.`}
       </span>
+      {access.authorized && (
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => access.refresh()}
+        >
+          Actualiser les données partagées
+        </button>
+      )}
+      {access.authorized && access.syncInfo.conflict && (
+        <div className="sync-conflict-actions">
+          <button
+            className="secondary"
+            onClick={async () =>
+              download(
+                new Blob([JSON.stringify(await access.pending(), null, 2)], {
+                  type: "application/json",
+                }),
+                `Modifications en attente ${patrol}.json`,
+              )
+            }
+          >
+            Télécharger ma modification
+          </button>
+          <button
+            className="secondary"
+            onClick={() => {
+              if (
+                confirm(
+                  "Abandonner les modifications en attente sur cet appareil et utiliser la version partagée ? Téléchargez votre copie avant de continuer si nécessaire.",
+                )
+              )
+                access.discardPending();
+            }}
+          >
+            Utiliser la version partagée
+          </button>
+        </div>
+      )}
     </div>
   );
   async function exportMeeting(meeting) {
@@ -855,20 +904,42 @@ function App() {
                               {t.type === "out" ? money(t.amount) : "—"}
                             </td>
                             <td>
-                              <button
-                                className="text-btn"
-                                onClick={() => {
-                                  if (confirm("Supprimer cette opération ?"))
-                                    patch(
-                                      (p) =>
-                                        (p.transactions = p.transactions.filter(
+                              <div className="transaction-actions">
+                                <button
+                                  className="secondary"
+                                  type="button"
+                                  aria-label={`Modifier l’opération ${t.description}`}
+                                  onClick={() =>
+                                    setModal({
+                                      type: "transaction",
+                                      transaction: cloneData(t),
+                                    })
+                                  }
+                                >
+                                  Modifier
+                                </button>
+                                <button
+                                  className="delete-action"
+                                  type="button"
+                                  aria-label={`Supprimer l’opération ${t.description}`}
+                                  onClick={() => {
+                                    if (access.configured && !access.authorized)
+                                      return;
+                                    if (
+                                      confirm(
+                                        "Supprimer cette opération pour tous les comptes autorisés de la patrouille ?",
+                                      )
+                                    )
+                                      patch((p) => {
+                                        p.transactions = p.transactions.filter(
                                           (x) => x.id !== t.id,
-                                        )),
-                                    );
-                                }}
-                              >
-                                Supprimer
-                              </button>
+                                        );
+                                      });
+                                  }}
+                                >
+                                  Supprimer
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1355,11 +1426,16 @@ function App() {
                 </p>
               </>
             )}
-            {modal === "transaction" && (
+            {(modal === "transaction" || modal.type === "transaction") && (
               <>
                 <div className="eyebrow">TRÉSORERIE</div>
-                <h2>Nouvelle opération</h2>
+                <h2>
+                  {modal.transaction
+                    ? "Modifier l’opération"
+                    : "Nouvelle opération"}
+                </h2>
                 <form
+                  key={modal.transaction?.id || "new-transaction"}
                   onSubmit={(e) => {
                     e.preventDefault();
                     const f = Object.fromEntries(new FormData(e.currentTarget));
@@ -1369,14 +1445,36 @@ function App() {
                       Number(f.amount) <= 0
                     )
                       return;
-                    patch((p) =>
-                      p.transactions.push({
-                        ...f,
-                        description: f.description.trim(),
-                        amount: Number(f.amount),
-                        id: uid(),
-                      }),
-                    );
+                    if (access.configured && !access.authorized)
+                      return notify(
+                        "Connecte-toi avec un compte autorisé pour enregistrer.",
+                      );
+                    if (modal.transaction) {
+                      const current = dataRef.current.patrols[
+                        patrol
+                      ].transactions.find((t) => t.id === modal.transaction.id);
+                      if (
+                        JSON.stringify(current) !==
+                        JSON.stringify(modal.transaction)
+                      )
+                        return notify(
+                          "Cette opération a été modifiée ou supprimée par une autre personne. Ferme ce formulaire, vérifie la version partagée et réessaie.",
+                        );
+                    }
+                    const transaction = {
+                      ...f,
+                      description: f.description.trim(),
+                      amount: Number(f.amount),
+                      id: modal.transaction?.id || uid(),
+                    };
+                    patch((p) => {
+                      const index = p.transactions.findIndex(
+                        (t) => t.id === transaction.id,
+                      );
+                      if (index < 0) p.transactions.push(transaction);
+                      else p.transactions[index] = transaction;
+                    });
+                    setActivity(f.activity);
                     setModal(null);
                   }}
                 >
@@ -1384,6 +1482,7 @@ function App() {
                     Description
                     <input
                       name="description"
+                      defaultValue={modal.transaction?.description || ""}
                       required
                       maxLength={200}
                       placeholder="Cotisation, achat de matériel…"
@@ -1395,13 +1494,16 @@ function App() {
                       <input
                         name="date"
                         type="date"
-                        defaultValue={today()}
+                        defaultValue={modal.transaction?.date || today()}
                         required
                       />
                     </label>
                     <label>
                       Type
-                      <select name="type">
+                      <select
+                        name="type"
+                        defaultValue={modal.transaction?.type || "in"}
+                      >
                         <option value="in">Entrée</option>
                         <option value="out">Sortie</option>
                       </select>
@@ -1412,6 +1514,7 @@ function App() {
                       Montant
                       <input
                         name="amount"
+                        defaultValue={modal.transaction?.amount ?? ""}
                         type="number"
                         step="0.01"
                         min="0.01"
@@ -1420,7 +1523,10 @@ function App() {
                     </label>
                     <label>
                       Activité
-                      <select name="activity" defaultValue={activity}>
+                      <select
+                        name="activity"
+                        defaultValue={modal.transaction?.activity || activity}
+                      >
                         {activities.map((a) => (
                           <option key={a}>{a}</option>
                         ))}
@@ -1764,7 +1870,7 @@ function App() {
                             throw Error(
                               "Aucune ancienne copie locale pour cette patrouille.",
                             );
-                          const copy = structuredClone(data);
+                          const copy = cloneData(data);
                           Object.assign(
                             copy.patrols[patrol],
                             history[0].payload,

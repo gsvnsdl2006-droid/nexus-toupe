@@ -195,7 +195,7 @@ export async function attendanceExcel(patrol, members, meetings) {
   ];
   const rows = members.map((member) => {
     const relevant = meetings.filter((m) =>
-      Object.hasOwn(m.attendance, member.id),
+      Object.prototype.hasOwnProperty.call(m.attendance, member.id),
     );
     const present = relevant.filter(
       (m) => m.attendance[member.id] === "present",

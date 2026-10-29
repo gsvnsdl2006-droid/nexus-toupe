@@ -80,3 +80,13 @@ Photographer event deletion is available to the two confirmed admins after Googl
 ## Vowel and semaphore codes
 
 Codes now includes **Code des voyelles** and **Sémaphore**, with instant encoding/decoding, clickable visual A–Z references, copied/downloaded text and a mobile visual message preview. Vowel anchors A/E/I/O/U use 1/2/3/4/5 large hats (`^`), with one small hat (`˄`) per subsequent alphabet position. Semaphore follows the supplied facing-the-signaller flag chart; two Unicode direction arrows form each portable text token. Spaces separate letters and `/` separates words in both modes. The semaphore space/rest position is also illustrated. These tools run locally and require no account or database changes.
+
+## Shared treasury reliability and browser compatibility
+
+All three accounts authorized for a patrol can create, edit and delete its transactions; member/meeting/camp and photographer deletion still retain their separate admin restrictions. The shared status distinguishes queued/error states from server-acknowledged saves and offers an explicit refresh. Records refresh on section entry, focus, visibility/online events and every 15 seconds while visible.
+
+`src/private-sync.js` saves per-account/per-patrol pending operations in IndexedDB and replays them against the latest shared revision. Independent record/field edits merge by stable IDs; compare-and-set collisions retry, and a lost acknowledgement does not duplicate a transaction. Conflicting edits to the same field remain pending, with a downloadable local operation backup and an explicit choice to discard it in favor of the shared version. An open transaction editor refuses to overwrite a transaction changed or removed since the editor opened. Existing local-only changes from an older deployment are not silently uploaded over shared records; previous local snapshots remain in Archives & exports recovery copies.
+
+The browser compatibility helper supplies UUID and plain-data clone fallbacks and uses AbortController timers instead of requiring `AbortSignal.timeout`. Dates are generated consistently as local YYYY-MM-DD. If IndexedDB is blocked, the app can still open online spaces and public photo albums; local/offline recovery cannot be guaranteed when a browser refuses storage. Safari fallback tests disable the modern APIs explicitly, and photo galleries are checked at phone, tablet and laptop widths.
+
+Photographer viewing no longer shares the mutation rate limit: reads stay at `/photographer`, while legacy POST/DELETE requests redirect with method preservation to `/photographer-write`. Only that write function carries the per-IP/domain rate limit. Uploaded albums retain the existing site-wide store; no data migration, SQL or credential changes are required.

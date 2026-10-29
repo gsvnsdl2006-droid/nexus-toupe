@@ -13,7 +13,7 @@ export function removeMember(patrol, id) {
   const member = patrol.members.find((m) => m.id === id);
   if (!member) return;
   for (const meeting of patrol.meetings) {
-    if (Object.hasOwn(meeting.attendance, id)) {
+    if (Object.prototype.hasOwnProperty.call(meeting.attendance, id)) {
       meeting.memberNames ??= {};
       meeting.memberNames[id] = member.name;
     }

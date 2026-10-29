@@ -1,3 +1,5 @@
+import { cloneData } from "./browser-compat.js";
+import { randomId } from "./browser-compat.js";
 import { get, set, entries, update as atomicUpdate } from "idb-keyval";
 const prefix = "nexus-badge-photo:";
 export const isImage = (value) =>
@@ -19,7 +21,7 @@ export async function vaultEntries() {
     .filter((x) => Number.isInteger(x.badge) && x.badge >= 0 && x.badge <= 96);
 }
 export async function recoverPhotos(data) {
-  const copy = structuredClone(data);
+  const copy = cloneData(data);
   copy.badgeImages ??= {};
   const stored = await vaultEntries();
   const saved = new Map(stored.map((x) => [x.badge, x]));
@@ -28,7 +30,7 @@ export async function recoverPhotos(data) {
       const item = {
         badge: Number(id),
         image,
-        generation: crypto.randomUUID(),
+        generation: randomId(),
         pending: true,
         expectedVersion: null,
       };
@@ -46,7 +48,7 @@ export async function saveBadgeLocally(badge, image, expectedVersion = null) {
   const item = {
     badge,
     image,
-    generation: crypto.randomUUID(),
+    generation: randomId(),
     pending: true,
     expectedVersion: expectedVersion ?? previous?.uploadedVersion ?? null,
   };

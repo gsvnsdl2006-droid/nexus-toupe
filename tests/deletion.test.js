@@ -64,7 +64,9 @@ test("PostgreSQL RLS and deletion trigger permit only the two leaders to remove 
       meetings: [
         { id: "event", title: "Réunion", attendance: { member: "present" } },
       ],
-      transactions: [],
+      transactions: [
+        { id: "cashflow-a", amount: 10, description: "Cotisation" },
+      ],
       camp: { "Camp original": { A1: "Souvenir" } },
       camps: [
         { id: "camp-a", title: "Camp été", fields: { title: "Camp été" } },
@@ -149,6 +151,20 @@ test("PostgreSQL RLS and deletion trigger permit only the two leaders to remove 
     );
     await db.exec(
       `update public.patrol_records set payload=jsonb_set(payload,'{camps,0,title}','"Camp renommé"') where patrol='Goélands'`,
+    );
+    await db.exec(
+      `update public.patrol_records set payload=jsonb_set(payload,'{transactions,0,amount}','25') where patrol='Goélands'`,
+    );
+    await db.exec(
+      `update public.patrol_records set payload=jsonb_set(payload,'{transactions}','[]') where patrol='Goélands'`,
+    );
+    assert.equal(
+      (
+        await db.query(
+          `select jsonb_array_length(payload->'transactions') as n from public.patrol_records`,
+        )
+      ).rows[0].n,
+      0,
     );
     await db.exec("reset role");
     await login("outsider@gmail.com");

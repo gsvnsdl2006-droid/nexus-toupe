@@ -98,7 +98,8 @@ export const VOWEL_CODE = Object.freeze(
   Object.fromEntries(
     [...ALPHABET].map((char, index) => {
       const vowels = [..."AEIOU"];
-      const vowel = vowels.filter((v) => ALPHABET.indexOf(v) <= index).at(-1);
+      const anchors = vowels.filter((v) => ALPHABET.indexOf(v) <= index);
+      const vowel = anchors[anchors.length - 1];
       return [
         char,
         "^".repeat(vowels.indexOf(vowel) + 1) +

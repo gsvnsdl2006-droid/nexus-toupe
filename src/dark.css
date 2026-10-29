@@ -3442,3 +3442,23 @@ input[type="file"] {
     font-size: 9px;
   }
 }
+.transaction-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 8px;
+}
+.transaction-actions button {
+  min-height: 44px;
+  padding: 10px 13px;
+}
+.sync-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+.inline-save-status {
+  flex-wrap: wrap;
+}

@@ -1,3 +1,4 @@
+import { randomId, fetchWithTimeout } from "./browser-compat.js";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Camera,
@@ -16,18 +17,23 @@ import { patrols, today } from "./model";
 import { compressEventPhoto } from "./photographer-images";
 const endpoint = "/.netlify/functions/photographer";
 async function call(url, options) {
-  const response = await fetch(url, {
-    ...options,
-    signal: AbortSignal.timeout(45000),
-  });
+  const response = await fetchWithTimeout(url, options);
   let data;
   try {
     data = await response.json();
   } catch {
-    throw Error("L’album est indisponible. Réessaie dans un instant.");
+    throw Error(
+      response.status === 429
+        ? "Trop d’envois à la fois. Attends une minute puis réessaie ; tes photos sont conservées."
+        : "L’album est indisponible. Réessaie dans un instant.",
+    );
   }
   if (!response.ok)
-    throw Error(data.error || "Envoi impossible. Réessaie dans un instant.");
+    throw Error(
+      response.status === 429
+        ? "Trop d’envois à la fois. Attends une minute puis réessaie ; tes photos sont conservées."
+        : data.error || "Envoi impossible. Réessaie dans un instant.",
+    );
   return data;
 }
 export default function Photographer({
@@ -54,7 +60,7 @@ export default function Photographer({
     [deleting, setDeleting] = useState(false);
   const writes = useRef(Promise.resolve());
   const request = useRef(0),
-    eventId = useRef(crypto.randomUUID()),
+    eventId = useRef(randomId()),
     fingerprint = useRef("");
   async function load(next = null) {
     const id = ++request.current;
@@ -90,13 +96,32 @@ export default function Photographer({
     };
   }, [patrol]);
   useEffect(() => {
+    const refresh = () => {
+      if (
+        document.visibilityState !== "hidden" &&
+        !editing &&
+        !saving &&
+        !deleting
+      )
+        load();
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [patrol, editing, saving, deleting]);
+  useEffect(() => {
     let active = true;
     setDraftPatrol(null);
     setEditing(false);
     setTitle("");
     setDate(today());
     setPhotos([]);
-    eventId.current = crypto.randomUUID();
+    eventId.current = randomId();
     fingerprint.current = "";
     writes.current
       .catch(() => {})
@@ -107,7 +132,7 @@ export default function Photographer({
         setDate(draft?.date || today());
         setPhotos(Array.isArray(draft?.photos) ? draft.photos : []);
         setEditing(Boolean(draft?.title || draft?.photos?.length));
-        eventId.current = draft?.id || crypto.randomUUID();
+        eventId.current = draft?.id || randomId();
         fingerprint.current = draft?.fingerprint || "";
         setDraftPatrol(patrol);
       })
@@ -170,7 +195,7 @@ export default function Photographer({
     setNotice("");
     const content = JSON.stringify({ title, date, photos });
     if (fingerprint.current && fingerprint.current !== content)
-      eventId.current = crypto.randomUUID();
+      eventId.current = randomId();
     fingerprint.current = content;
     try {
       const result = await call(`${endpoint}?patrol=${patrol}`, {
@@ -188,7 +213,7 @@ export default function Photographer({
       setTitle("");
       setPhotos([]);
       setEditing(false);
-      eventId.current = crypto.randomUUID();
+      eventId.current = randomId();
       fingerprint.current = "";
     } catch (e) {
       setError(e.message);

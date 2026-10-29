@@ -49,6 +49,20 @@ test("anyone can publish four compressed photos, retry safely, and see a shared 
       body: Buffer.from(await response.arrayBuffer()),
     });
   }
+  await page.addInitScript(() => {
+    Object.defineProperty(crypto, "randomUUID", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(AbortSignal, "timeout", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(window, "structuredClone", {
+      configurable: true,
+      value: undefined,
+    });
+  });
   await page.route("**/.netlify/functions/photographer?*", api);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
@@ -122,6 +136,16 @@ test("anyone can publish four compressed photos, retry safely, and see a shared 
         .evaluateAll((imgs) => imgs.every((img) => img.naturalWidth > 0)),
     )
     .toBe(true);
+  for (const width of [390, 820, 1440]) {
+    await other.setViewportSize({ width, height: 1000 });
+    await expect(other.locator(".photo-event-grid img")).toHaveCount(4);
+    expect(
+      await other.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+  await other.setViewportSize({ width: 320, height: 720 });
   await other.evaluate(() => window.scrollTo(0, 0));
   await other.screenshot({
     path: "/tmp/nexus-photographer-gallery.png",
@@ -151,4 +175,33 @@ test("anyone can publish four compressed photos, retry safely, and see a shared 
     fullPage: true,
   });
   await fresh.close();
+});
+
+test("public albums remain accessible when a browser refuses local IndexedDB storage", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "indexedDB", {
+      configurable: true,
+      value: {
+        open() {
+          throw Error("Storage disabled");
+        },
+      },
+    });
+  });
+  await page.route("**/.netlify/functions/photographer?*", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ events: [], cursor: null }),
+    }),
+  );
+  await page.goto("/");
+  await page.locator(".codes-entry").filter({ hasText: "Photographe" }).click();
+  await expect(
+    page.getByText("Le prochain souvenir commence avec toi."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Créer un événement", exact: true }),
+  ).toBeEnabled();
 });

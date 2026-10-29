@@ -1,3 +1,4 @@
+import { randomId } from "./browser-compat.js";
 import { badges } from "./badges.js";
 export const patrols = [
   "Goélands",
@@ -13,8 +14,11 @@ export const activities = [
   "camp de patrouille",
   "caisse de patrouille",
 ];
-export const uid = () => crypto.randomUUID();
-export const today = () => new Date().toLocaleDateString("en-CA");
+export const uid = randomId;
+export const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 export const initial = () => ({
   version: 1,
   updated: Date.now(),
@@ -43,7 +47,9 @@ export function totals(rows) {
   );
 }
 export function attendance(member, meetings) {
-  const relevant = meetings.filter((m) => Object.hasOwn(m.attendance, member));
+  const relevant = meetings.filter((m) =>
+    Object.prototype.hasOwnProperty.call(m.attendance, member),
+  );
   return {
     present: relevant.filter((m) => m.attendance[member] === "present").length,
     total: relevant.length,
