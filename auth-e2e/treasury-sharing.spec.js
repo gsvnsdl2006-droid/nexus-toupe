@@ -97,12 +97,14 @@ test("three authorized accounts share, edit and delete transactions across phone
   await expect.poll(() => shared.payload.transactions[0].amount).toBe(42);
   await laptop.clock.fastForward(15000);
   await expect(laptop.locator("tbody")).toContainText("42");
-  laptop.once("dialog", (d) => d.accept());
   await laptop
     .getByRole("button", {
       name: "Supprimer l’opération Cotisation partagée",
       exact: true,
     })
+    .click();
+  await laptop
+    .getByRole("button", { name: "Confirmer la suppression", exact: true })
     .click();
   await expect.poll(() => shared.payload.transactions.length).toBe(0);
   await phone.evaluate(() => window.dispatchEvent(new Event("focus")));

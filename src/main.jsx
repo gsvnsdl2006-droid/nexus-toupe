@@ -825,8 +825,8 @@ function App() {
                   <div>
                     <h2>Cashflow patrouille {patrol.toLowerCase()}</h2>
                     <p>
-                      Les quatre activités de votre modèle, dans une caisse bien
-                      organisée.
+                      Chaque opération peut être modifiée ou supprimée avec les
+                      boutons sous sa description.
                     </p>
                   </div>
                   <div className="actions">
@@ -884,10 +884,9 @@ function App() {
                     <thead>
                       <tr>
                         <th>Date</th>
-                        <th>Description / Name</th>
+                        <th>Description et actions</th>
                         <th>Entrée / In</th>
                         <th>Sortie / Out</th>
-                        <th />
                       </tr>
                     </thead>
                     <tbody>
@@ -896,14 +895,23 @@ function App() {
                         .map((t) => (
                           <tr key={t.id}>
                             <td data-label="Date">{t.date}</td>
-                            <td data-label="Description">{t.description}</td>
-                            <td data-label="Entrée" className="positive">
-                              {t.type === "in" ? money(t.amount) : "—"}
-                            </td>
-                            <td data-label="Sortie">
-                              {t.type === "out" ? money(t.amount) : "—"}
-                            </td>
-                            <td>
+                            <td
+                              data-label="Description"
+                              className="transaction-description"
+                            >
+                              <button
+                                type="button"
+                                className="transaction-title"
+                                aria-label={`Ouvrir l’opération ${t.description}`}
+                                onClick={() =>
+                                  setModal({
+                                    type: "transaction",
+                                    transaction: cloneData(t),
+                                  })
+                                }
+                              >
+                                {t.description}
+                              </button>
                               <div className="transaction-actions">
                                 <button
                                   className="secondary"
@@ -922,24 +930,22 @@ function App() {
                                   className="delete-action"
                                   type="button"
                                   aria-label={`Supprimer l’opération ${t.description}`}
-                                  onClick={() => {
-                                    if (access.configured && !access.authorized)
-                                      return;
-                                    if (
-                                      confirm(
-                                        "Supprimer cette opération pour tous les comptes autorisés de la patrouille ?",
-                                      )
-                                    )
-                                      patch((p) => {
-                                        p.transactions = p.transactions.filter(
-                                          (x) => x.id !== t.id,
-                                        );
-                                      });
-                                  }}
+                                  onClick={() =>
+                                    setModal({
+                                      type: "transaction-delete",
+                                      transaction: cloneData(t),
+                                    })
+                                  }
                                 >
                                   Supprimer
                                 </button>
                               </div>
+                            </td>
+                            <td data-label="Entrée" className="positive">
+                              {t.type === "in" ? money(t.amount) : "—"}
+                            </td>
+                            <td data-label="Sortie">
+                              {t.type === "out" ? money(t.amount) : "—"}
                             </td>
                           </tr>
                         ))}
@@ -1426,6 +1432,48 @@ function App() {
                 </p>
               </>
             )}
+            {modal.type === "transaction-delete" && (
+              <>
+                <div className="eyebrow">TRÉSORERIE · SUPPRESSION</div>
+                <h2>Supprimer cette opération ?</h2>
+                <p>
+                  <strong>{modal.transaction.description}</strong> ·{" "}
+                  {money(modal.transaction.amount)} · {modal.transaction.date}
+                </p>
+                <p>
+                  Cette opération sera retirée de la caisse partagée pour les
+                  trois comptes autorisés.
+                </p>
+                <div className="actions transaction-delete-confirm">
+                  <button
+                    type="button"
+                    className="delete-action"
+                    onClick={() => {
+                      if (access.configured && !access.authorized)
+                        return notify(
+                          "Connecte-toi avec un compte autorisé pour supprimer cette opération.",
+                        );
+                      const id = modal.transaction.id;
+                      patch((p) => {
+                        p.transactions = p.transactions.filter(
+                          (t) => t.id !== id,
+                        );
+                      });
+                      setModal(null);
+                    }}
+                  >
+                    Confirmer la suppression
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setModal(null)}
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </>
+            )}
             {(modal === "transaction" || modal.type === "transaction") && (
               <>
                 <div className="eyebrow">TRÉSORERIE</div>
@@ -1536,6 +1584,20 @@ function App() {
                   <button className="primary">
                     <Check size={16} /> Enregistrer l’opération
                   </button>
+                  {modal.transaction && (
+                    <button
+                      type="button"
+                      className="delete-action transaction-editor-delete"
+                      onClick={() =>
+                        setModal({
+                          type: "transaction-delete",
+                          transaction: modal.transaction,
+                        })
+                      }
+                    >
+                      Supprimer cette opération
+                    </button>
+                  )}
                 </form>
               </>
             )}

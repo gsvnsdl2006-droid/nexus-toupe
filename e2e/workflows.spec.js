@@ -196,3 +196,67 @@ test("browser Back and Forward retain the patrol navigation hierarchy", async ({
   await expect(page.locator(".workspace-grid")).toBeVisible();
   await expect(page.locator(".patrol-title")).toContainText("Orcs");
 });
+
+test("every transaction has visible edit and delete buttons under its description at all device widths", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /PATROUILLE 01/ }).click();
+  await page.getByRole("button", { name: "Trésorier", exact: true }).click();
+  for (const description of [
+    "Cotisation de patrouille",
+    "Achat de matériel pour la prochaine réunion",
+  ]) {
+    await page.getByRole("button", { name: "Opération", exact: true }).click();
+    await page.getByLabel("Description", { exact: true }).fill(description);
+    await page.getByLabel("Montant", { exact: true }).fill("12");
+    await page
+      .getByRole("button", { name: "Enregistrer l’opération", exact: true })
+      .click();
+  }
+  for (const width of [320, 390, 768, 820, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const row of await page.locator(".treasury-table tbody tr").all()) {
+      for (const label of [/Modifier l’opération/, /Supprimer l’opération/]) {
+        const button = row.getByRole("button", { name: label });
+        await button.scrollIntoViewIfNeeded();
+        await expect(button).toBeVisible();
+        const box = await button.boundingBox();
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+      }
+    }
+  }
+  await page
+    .getByRole("button", {
+      name: "Modifier l’opération Cotisation de patrouille",
+      exact: true,
+    })
+    .click();
+  await page.getByLabel("Montant", { exact: true }).fill("18");
+  await page
+    .getByRole("button", { name: "Enregistrer l’opération", exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Supprimer l’opération Cotisation de patrouille",
+      exact: true,
+    })
+    .click();
+  await page.getByRole("button", { name: "Annuler", exact: true }).click();
+  await expect(page.locator(".treasury-table tbody tr")).toHaveCount(2);
+  await page
+    .getByRole("button", {
+      name: "Supprimer l’opération Cotisation de patrouille",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Confirmer la suppression", exact: true })
+    .click();
+  await expect(page.locator(".treasury-table tbody tr")).toHaveCount(1);
+  await page.reload();
+  await page.getByRole("button", { name: /PATROUILLE 01/ }).click();
+  await page.getByRole("button", { name: "Trésorier", exact: true }).click();
+  await expect(page.locator(".treasury-table tbody tr")).toHaveCount(1);
+});

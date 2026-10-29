@@ -3462,3 +3462,58 @@ input[type="file"] {
 .inline-save-status {
   flex-wrap: wrap;
 }
+.treasury-table .transaction-description {
+  min-width: 170px;
+  overflow-wrap: anywhere;
+}
+.transaction-title {
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  font-weight: 650;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.treasury-table .transaction-actions {
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+.treasury-table .transaction-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  min-height: 44px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.transaction-editor-delete {
+  margin-top: 16px;
+}
+.transaction-delete-confirm {
+  margin-top: 24px;
+}
+@media (max-width: 760px) {
+  .treasury-table .transaction-description {
+    min-width: 0;
+  }
+  .treasury-table td:last-child {
+    grid-column: auto;
+    border-top: 0;
+  }
+  .treasury-table td:last-child:before {
+    display: block;
+  }
+  .treasury-table .transaction-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .transaction-editor-delete {
+    width: 100%;
+  }
+}
