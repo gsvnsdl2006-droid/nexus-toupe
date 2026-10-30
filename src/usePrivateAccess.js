@@ -27,12 +27,14 @@ export default function usePrivateAccess(
     [authError, setAuthError] = useState(loginReturnError),
     [deletionReady, setDeletionReady] = useState(false),
     [campDeletionReady, setCampDeletionReady] = useState(false),
-    [syncInfo, setSyncInfo] = useState({ pending: 0, error: false });
+    [syncInfo, setSyncInfo] = useState({ pending: 0, error: false }),
+    [loadedPatrols, setLoadedPatrols] = useState([]);
   const handler = useRef(onRemote),
     currentPatrol = useRef(patrol),
     permissions = useRef([]),
     sync = useRef(null),
-    owner = useRef(null);
+    owner = useRef(null),
+    unsaved = useRef(new Set());
   handler.current = onRemote;
   currentPatrol.current = patrol;
   useEffect(() => {
@@ -70,6 +72,8 @@ export default function usePrivateAccess(
       if (owner.current) owner.current.active = false;
       sync.current = null;
       owner.current = null;
+      setLoadedPatrols([]);
+      unsaved.current.clear();
     }
     if (!accessClient || !user) {
       permissions.current = [];
@@ -161,6 +165,13 @@ export default function usePrivateAccess(
           },
           apply: (payload, name) => handler.current(payload, name),
           status: (message, info) => {
+            if (!sessionOwner.active) return;
+            if (info.pending) unsaved.current.add(info.name);
+            else unsaved.current.delete(info.name);
+            if (!info.error && !info.pending)
+              setLoadedPatrols((old) =>
+                old.includes(info.name) ? old : [...old, info.name],
+              );
             if (sessionOwner.active && currentPatrol.current === info.name) {
               setStatus(message);
               setSyncInfo(info);
@@ -222,7 +233,21 @@ export default function usePrivateAccess(
     },
     [],
   );
+  useEffect(() => {
+    const warn = (event) => {
+      if (!unsaved.current.size) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
   return {
+    membersReady:
+      Boolean(user) &&
+      verifiedIdentity === `${user.id}:${user.email}` &&
+      allowed.includes(patrol) &&
+      loadedPatrols.includes(patrol),
     configured: Boolean(accessClient),
     user,
     allowed,
@@ -235,8 +260,10 @@ export default function usePrivateAccess(
       verifiedIdentity === `${user.id}:${user.email}` &&
       allowed.includes(patrol),
     save: (p, previous) => {
-      if (sync.current && allowed.includes(patrol))
+      if (sync.current && allowed.includes(patrol)) {
+        unsaved.current.add(patrol);
         return sync.current.enqueue(patrol, previous, privatePayload(p));
+      }
     },
     refresh: () => sync.current?.synchronize(patrol),
     pending: () => sync.current?.pending(patrol),
@@ -270,6 +297,17 @@ export default function usePrivateAccess(
         throw error;
       }
     },
-    signOut: () => accessClient.auth.signOut(),
+    signOut: async () => {
+      if (unsaved.current.size) {
+        setAuthError(
+          "Des modifications restent à enregistrer. Attends la confirmation de sauvegarde avant de te déconnecter.",
+        );
+        setStatus(
+          "Modifications en attente · réessaie l’enregistrement avant de te déconnecter.",
+        );
+        return;
+      }
+      return accessClient.auth.signOut();
+    },
   };
 }

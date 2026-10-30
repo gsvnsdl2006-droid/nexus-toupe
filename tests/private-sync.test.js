@@ -167,3 +167,43 @@ test("PostgreSQL JSON object key ordering does not turn a saved change into a co
   };
   assert.deepEqual(mergePrivate(before, mine, alreadySaved), mine);
 });
+
+test("an edit arriving during acknowledgement backup is saved without waiting for polling", async () => {
+  const base = initial();
+  let record = { payload: structuredClone(base), revision: 1 };
+  let release, entered;
+  const applying = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const blocked = new Promise((resolve) => {
+    release = resolve;
+  });
+  let first = true;
+  const sync = createPrivateSync({
+    read: async () => structuredClone(record),
+    write: async (_name, payload, revision) => {
+      record = { payload, revision: revision + 1 };
+      return { revision: record.revision };
+    },
+    loadQueue: async () => [],
+    storeQueue: async () => {},
+    status: () => {},
+    apply: async () => {
+      if (first) {
+        first = false;
+        entered();
+        await blocked;
+      }
+    },
+  });
+  const refresh = sync.synchronize("Goélands");
+  await applying;
+  const changed = structuredClone(base);
+  changed.members.push({ id: "late-member", name: "Late member" });
+  const save = sync.enqueue("Goélands", base, changed);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  release();
+  await Promise.all([refresh, save]);
+  assert.equal(record.payload.members[0].name, "Late member");
+  assert.equal((await sync.pending("Goélands")).length, 0);
+});

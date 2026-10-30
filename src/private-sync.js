@@ -84,7 +84,8 @@ export function createPrivateSync({
 }) {
   const queues = new Map(),
     jobs = new Map(),
-    persistence = new Map();
+    persistence = new Map(),
+    generations = new Map();
   async function queue(name) {
     if (!queues.has(name))
       queues.set(
@@ -105,6 +106,7 @@ export function createPrivateSync({
   }
   async function synchronize(name) {
     if (jobs.has(name)) return jobs.get(name);
+    const started = generations.get(name) || 0;
     const task = (async () => {
       const operations = await queue(name);
       if (!active()) return;
@@ -165,11 +167,20 @@ export function createPrivateSync({
       await task;
     } finally {
       jobs.delete(name);
+      // An edit may arrive while apply() is backing up the previous snapshot.
+      // Do not leave that edit waiting for the next polling interval.
+      if (
+        active() &&
+        (generations.get(name) || 0) !== started &&
+        (await queue(name)).length
+      )
+        await synchronize(name);
     }
   }
   return {
     async enqueue(name, before, after) {
       const operations = await queue(name);
+      generations.set(name, (generations.get(name) || 0) + 1);
       operations.push({
         before: cloneData(before),
         after: cloneData(after),

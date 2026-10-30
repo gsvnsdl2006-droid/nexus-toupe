@@ -100,6 +100,7 @@ function App() {
     [busy, setBusy] = useState(false),
     [saveState, setSaveState] = useState("Enregistré sur cet appareil"),
     [member, setMember] = useState(""),
+    [recoverableMembers, setRecoverableMembers] = useState([]),
     [search, setSearch] = useState(""),
     [activity, setActivity] = useState(activities[0]),
     [activityOpen, setActivityOpen] = useState(false);
@@ -110,6 +111,7 @@ function App() {
   });
   useEffect(() => {
     setActivityOpen(false);
+    setRecoverableMembers([]);
   }, [patrol]);
   useEffect(() => {
     if (section !== "treasury") setActivityOpen(false);
@@ -1449,90 +1451,171 @@ function App() {
               <X />
             </button>
             {modal === "member" && (
-              <>
-                <div className="eyebrow">LA FORCE DU COLLECTIF</div>
-                <h2>Les membres · {patrol}</h2>
-                {inlineSaveStatus}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const f = new FormData(e.currentTarget);
-                    const name = f.get("name").trim();
-                    if (!name) return;
-                    if (
-                      p.members.some(
-                        (m) => m.name.toLowerCase() === name.toLowerCase(),
+              <AccessGate access={access} patrol={patrol}>
+                {access.membersReady ? (
+                  <>
+                    <div className="eyebrow">LA FORCE DU COLLECTIF</div>
+                    <h2>Les membres · {patrol}</h2>
+                    {inlineSaveStatus}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const f = new FormData(e.currentTarget);
+                        const name = f.get("name").trim();
+                        if (!name) return;
+                        if (
+                          p.members.some(
+                            (m) => m.name.toLowerCase() === name.toLowerCase(),
+                          )
+                        )
+                          return notify("Ce nom existe déjà.");
+                        if (!access.membersReady)
+                          return notify(
+                            "Connecte-toi et attends le chargement de la liste partagée.",
+                          );
+                        patch((p) => p.members.push({ id: uid(), name }));
+                        e.currentTarget.reset();
+                      }}
+                    >
+                      <label>
+                        Prénom et nom
+                        <input
+                          name="name"
+                          placeholder="Ex. Marc Haddad"
+                          required
+                          maxLength={100}
+                        />
+                      </label>
+                      <button className="primary">
+                        <Plus size={16} /> Ajouter un membre
+                      </button>
+                    </form>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={async () => {
+                        try {
+                          const history =
+                            (await get(`nexus-private-backup-${patrol}`)) || [];
+                          const current =
+                            dataRef.current.patrols[patrol].members;
+                          const found = new Map();
+                          for (const backup of history)
+                            for (const m of backup.payload?.members || []) {
+                              if (
+                                !current.some(
+                                  (x) =>
+                                    x.id === m.id ||
+                                    x.name.toLowerCase() ===
+                                      m.name.toLowerCase(),
+                                )
+                              )
+                                found.set(m.id, m);
+                            }
+                          setRecoverableMembers([...found.values()]);
+                          if (!found.size)
+                            notify(
+                              "Aucun membre supplémentaire dans les sauvegardes de cet appareil.",
+                            );
+                        } catch {
+                          notify("Sauvegardes locales indisponibles.");
+                        }
+                      }}
+                    >
+                      Rechercher les membres non synchronisés sur cet appareil
+                    </button>
+                    {recoverableMembers
+                      .filter(
+                        (m) =>
+                          !p.members.some(
+                            (x) =>
+                              x.id === m.id ||
+                              x.name.toLowerCase() === m.name.toLowerCase(),
+                          ),
                       )
-                    )
-                      return notify("Ce nom existe déjà.");
-                    patch((p) => p.members.push({ id: uid(), name }));
-                    e.currentTarget.reset();
-                  }}
-                >
-                  <label>
-                    Prénom et nom
-                    <input
-                      name="name"
-                      placeholder="Ex. Marc Haddad"
-                      required
-                      maxLength={100}
-                    />
-                  </label>
-                  <button className="primary">
-                    <Plus size={16} /> Ajouter un membre
-                  </button>
-                </form>
-                {access.isLeader && !access.deletionReady && (
-                  <p className="deletion-setup">
-                    La suppression sécurisée attend l’activation de la mise à
-                    jour Supabase.
+                      .map((m) => (
+                        <p key={m.id}>
+                          {m.name}{" "}
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => {
+                              if (!access.membersReady) return;
+                              patch((p) => p.members.push(m));
+                            }}
+                          >
+                            Restaurer ce membre
+                          </button>
+                        </p>
+                      ))}
+                    {access.isLeader && !access.deletionReady && (
+                      <p className="deletion-setup">
+                        La suppression sécurisée attend l’activation de la mise
+                        à jour Supabase.
+                      </p>
+                    )}
+                    <div className="member-list">
+                      {p.members.map((m) => (
+                        <div key={m.id}>
+                          <span className="avatar">
+                            {m.photo ? (
+                              <img src={m.photo} alt={m.name} />
+                            ) : (
+                              m.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .slice(0, 2)
+                                .join("")
+                            )}
+                          </span>
+                          <span className="member-name">
+                            {m.photo && <img src={m.photo} alt={m.name} />}{" "}
+                            {m.name}
+                          </span>
+                          {access.isLeader && (
+                            <button
+                              type="button"
+                              className="delete-action"
+                              disabled={
+                                !access.canDelete || access.saving || busy
+                              }
+                              onClick={() => deleteMember(m)}
+                              aria-label={`Supprimer ${m.name}`}
+                            >
+                              Supprimer
+                            </button>
+                          )}
+                          <ImageUpload
+                            label={`Photo de ${m.name}`}
+                            value={m.photo}
+                            onChange={(photo) =>
+                              patch((p) => {
+                                p.members.find((x) => x.id === m.id).photo =
+                                  photo;
+                              })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="hint">
+                      Les membres sont conservés pour préserver l’historique des
+                      présences et de la progression.
+                    </p>
+                  </>
+                ) : (
+                  <p role="status">
+                    Chargement de la liste partagée avant modification…{" "}
+                    {access.status}
+                    <button
+                      className="secondary"
+                      onClick={() => access.refresh()}
+                    >
+                      Réessayer
+                    </button>
                   </p>
                 )}
-                <div className="member-list">
-                  {p.members.map((m) => (
-                    <div key={m.id}>
-                      <span className="avatar">
-                        {m.photo ? (
-                          <img src={m.photo} alt={m.name} />
-                        ) : (
-                          m.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .slice(0, 2)
-                            .join("")
-                        )}
-                      </span>
-                      <span className="member-name">
-                        {m.photo && <img src={m.photo} alt={m.name} />} {m.name}
-                      </span>
-                      {access.isLeader && (
-                        <button
-                          type="button"
-                          className="delete-action"
-                          disabled={!access.canDelete || access.saving || busy}
-                          onClick={() => deleteMember(m)}
-                          aria-label={`Supprimer ${m.name}`}
-                        >
-                          Supprimer
-                        </button>
-                      )}
-                      <ImageUpload
-                        label={`Photo de ${m.name}`}
-                        value={m.photo}
-                        onChange={(photo) =>
-                          patch((p) => {
-                            p.members.find((x) => x.id === m.id).photo = photo;
-                          })
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-                <p className="hint">
-                  Les membres sont conservés pour préserver l’historique des
-                  présences et de la progression.
-                </p>
-              </>
+              </AccessGate>
             )}
             {modal.type === "transaction-delete" && (
               <>
