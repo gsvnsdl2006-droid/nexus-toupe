@@ -101,6 +101,7 @@ function App() {
     [saveState, setSaveState] = useState("Enregistré sur cet appareil"),
     [member, setMember] = useState(""),
     [recoverableMembers, setRecoverableMembers] = useState([]),
+    [savingMember, setSavingMember] = useState(false),
     [search, setSearch] = useState(""),
     [activity, setActivity] = useState(activities[0]),
     [activityOpen, setActivityOpen] = useState(false);
@@ -227,7 +228,7 @@ function App() {
       JSON.stringify(privatePayload(next.patrols[patrol])) !==
         JSON.stringify(previous)
     )
-      access.save(next.patrols[patrol], previous);
+      return access.save(next.patrols[patrol], previous);
   }
   async function workbook(kind, name, snapshot = data) {
     const p = snapshot.patrols[name];
@@ -273,8 +274,19 @@ function App() {
       <span>
         {access.authorized
           ? access.status || "Chargement de l’espace partagé…"
-          : `${saveState}. Téléchargez vos documents pour les déposer sur Drive.`}
+          : patrol
+            ? "Copie locale de cet appareil · connecte un compte autorisé pour charger les membres et photos partagés."
+            : `${saveState}. Téléchargez vos documents pour les déposer sur Drive.`}
       </span>
+      {!access.authorized && patrol && (
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => setModal("member")}
+        >
+          Connecter ce téléphone / appareil aux membres partagés
+        </button>
+      )}
       {access.authorized && (
         <button
           type="button"
@@ -1458,9 +1470,10 @@ function App() {
                     <h2>Les membres · {patrol}</h2>
                     {inlineSaveStatus}
                     <form
-                      onSubmit={(e) => {
+                      onSubmit={async (e) => {
                         e.preventDefault();
-                        const f = new FormData(e.currentTarget);
+                        const form = e.currentTarget;
+                        const f = new FormData(form);
                         const name = f.get("name").trim();
                         if (!name) return;
                         if (
@@ -1473,8 +1486,19 @@ function App() {
                           return notify(
                             "Connecte-toi et attends le chargement de la liste partagée.",
                           );
-                        patch((p) => p.members.push({ id: uid(), name }));
-                        e.currentTarget.reset();
+                        setSavingMember(true);
+                        try {
+                          await patch((p) =>
+                            p.members.push({ id: uid(), name }),
+                          );
+                          if (!(await access.pending())?.length) form.reset();
+                          else
+                            notify(
+                              "Modification conservée sur cet appareil, mais pas encore partagée. Réessaie avec une connexion Internet avant de quitter.",
+                            );
+                        } finally {
+                          setSavingMember(false);
+                        }
                       }}
                     >
                       <label>
@@ -1486,8 +1510,11 @@ function App() {
                           maxLength={100}
                         />
                       </label>
-                      <button className="primary">
-                        <Plus size={16} /> Ajouter un membre
+                      <button className="primary" disabled={savingMember}>
+                        <Plus size={16} />{" "}
+                        {savingMember
+                          ? "Enregistrement en ligne…"
+                          : "Ajouter un membre"}
                       </button>
                     </form>
                     <button

@@ -7,6 +7,10 @@ const url = import.meta.env?.VITE_SUPABASE_URL || projectConfig.url,
 export const accessClient =
   url && key
     ? createClient(url, key, {
+        global: {
+          fetch: (input, options = {}) =>
+            fetch(input, { ...options, cache: "no-store" }),
+        },
         auth: {
           persistSession: true,
           autoRefreshToken: true,

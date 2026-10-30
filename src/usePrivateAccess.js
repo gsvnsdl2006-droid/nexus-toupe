@@ -28,7 +28,8 @@ export default function usePrivateAccess(
     [deletionReady, setDeletionReady] = useState(false),
     [campDeletionReady, setCampDeletionReady] = useState(false),
     [syncInfo, setSyncInfo] = useState({ pending: 0, error: false }),
-    [loadedPatrols, setLoadedPatrols] = useState([]);
+    [loadedPatrols, setLoadedPatrols] = useState([]),
+    [accessAttempt, setAccessAttempt] = useState(0);
   const handler = useRef(onRemote),
     currentPatrol = useRef(patrol),
     permissions = useRef([]),
@@ -65,7 +66,6 @@ export default function usePrivateAccess(
     let active = true;
     setDeletionReady(false);
     setCampDeletionReady(false);
-    setSyncInfo({ pending: 0, error: false });
     if (!ready) return;
     const identity = user ? `${user.id}:${user.email}` : null;
     if (owner.current?.identity !== identity) {
@@ -73,6 +73,7 @@ export default function usePrivateAccess(
       sync.current = null;
       owner.current = null;
       setLoadedPatrols([]);
+      setSyncInfo({ pending: 0, error: false });
       unsaved.current.clear();
     }
     if (!accessClient || !user) {
@@ -197,9 +198,14 @@ export default function usePrivateAccess(
     })()
       .catch((e) => {
         if (active) {
-          permissions.current = [];
-          setAllowed([]);
-          setStatus(e.message);
+          if (e.status === 401 || e.status === 403) {
+            permissions.current = [];
+            setAllowed([]);
+            setVerifiedIdentity(null);
+          }
+          setStatus(
+            `Connexion interrompue · ${e.message}. Nouvelle tentative automatique.`,
+          );
         }
       })
       .finally(() => {
@@ -208,7 +214,27 @@ export default function usePrivateAccess(
     return () => {
       active = false;
     };
-  }, [user?.id, user?.email, patrol, ready]);
+  }, [user?.id, user?.email, patrol, ready, accessAttempt]);
+  useEffect(() => {
+    if (!ready || !user) return;
+    const retry = () => {
+      if (document.visibilityState !== "hidden") setAccessAttempt((n) => n + 1);
+    };
+    const timer = setInterval(() => {
+      if (!permissions.current.includes(currentPatrol.current)) retry();
+    }, 10000);
+    window.addEventListener("pageshow", retry);
+    window.addEventListener("online", retry);
+    window.addEventListener("focus", retry);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("pageshow", retry);
+      window.removeEventListener("online", retry);
+      window.removeEventListener("focus", retry);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [ready, user?.id, user?.email]);
   useEffect(() => {
     if (!ready || loading || !user || !allowed.includes(patrol)) return;
     const refresh = () => {
@@ -216,7 +242,7 @@ export default function usePrivateAccess(
         sync.current?.synchronize(patrol);
     };
     refresh();
-    const timer = setInterval(refresh, 15000);
+    const timer = setInterval(refresh, 5000);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
     document.addEventListener("visibilitychange", refresh);
@@ -265,7 +291,10 @@ export default function usePrivateAccess(
         return sync.current.enqueue(patrol, previous, privatePayload(p));
       }
     },
-    refresh: () => sync.current?.synchronize(patrol),
+    refresh: () => {
+      if (!permissions.current.includes(patrol)) setAccessAttempt((n) => n + 1);
+      else return sync.current?.synchronize(patrol);
+    },
     pending: () => sync.current?.pending(patrol),
     discardPending: () => sync.current?.discard(patrol),
     isLeader: isLeader(user),
