@@ -97,7 +97,6 @@ export default function usePrivateAccess(
         const sessionOwner = { identity, active: true };
         owner.current = sessionOwner;
         const key = (name) => `nexus-private-pending:${identity}:${name}`;
-        const records = new Map();
         sync.current = createPrivateSync({
           active: () => sessionOwner.active,
           loadQueue: (name) =>
@@ -108,22 +107,9 @@ export default function usePrivateAccess(
           read: async (name) => {
             if (!permissions.current.includes(name))
               throw Error("Accès refusé à cette patrouille.");
-            // Poll only the small revision value; fetch member photos and the
-            // full payload only when another account has actually changed it.
-            const revision = await timed(
-              accessClient
-                .from("patrol_records")
-                .select("revision")
-                .eq("patrol", name)
-                .maybeSingle(),
-            );
-            if (revision.error) throw revision.error;
-            if (!revision.data) {
-              records.delete(name);
-              return null;
-            }
-            if (records.get(name)?.revision === revision.data.revision)
-              return records.get(name);
+            // Fetch the actual shared payload. Older deployed clients may write
+            // a payload without advancing revision, so revision-only caching
+            // can leave a device permanently displaying an empty/old roster.
             const response = await timed(
               accessClient
                 .from("patrol_records")
@@ -132,7 +118,6 @@ export default function usePrivateAccess(
                 .maybeSingle(),
             );
             if (response.error) throw response.error;
-            if (response.data) records.set(name, response.data);
             return response.data;
           },
           write: async (name, payload, prior) => {
@@ -160,8 +145,6 @@ export default function usePrivateAccess(
                   );
             if (result.error?.code === "23505") return null;
             if (result.error) throw result.error;
-            if (result.data)
-              records.set(name, { payload, revision: result.data.revision });
             return result.data;
           },
           apply: (payload, name) => handler.current(payload, name),
@@ -242,7 +225,7 @@ export default function usePrivateAccess(
         sync.current?.synchronize(patrol);
     };
     refresh();
-    const timer = setInterval(refresh, 5000);
+    const timer = setInterval(refresh, 10000);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
     document.addEventListener("visibilitychange", refresh);
@@ -294,6 +277,51 @@ export default function usePrivateAccess(
     refresh: () => {
       if (!permissions.current.includes(patrol)) setAccessAttempt((n) => n + 1);
       else return sync.current?.synchronize(patrol);
+    },
+    sharedMembers: async (name) => {
+      if (!permissions.current.includes(name) || !sync.current)
+        throw Error("Connecte un compte autorisé pour cette patrouille.");
+      const result = await timed(
+        accessClient
+          .from("patrol_records")
+          .select("payload,revision")
+          .eq("patrol", name)
+          .maybeSingle(),
+      );
+      if (result.error) throw result.error;
+      return result.data?.payload?.members || [];
+    },
+    importMembers: async (name, members) => {
+      if (!permissions.current.includes(name) || !sync.current)
+        throw Error("Connecte un compte autorisé pour cette patrouille.");
+      const result = await timed(
+        accessClient
+          .from("patrol_records")
+          .select("payload,revision")
+          .eq("patrol", name)
+          .maybeSingle(),
+      );
+      if (result.error) throw result.error;
+      const before = privatePayload(result.data?.payload || {});
+      const after = privatePayload(result.data?.payload || {});
+      after.members = [...before.members];
+      for (const member of members) {
+        if (
+          !after.members.some(
+            (m) =>
+              m.id === member.id ||
+              m.name.trim().toLowerCase() === member.name.trim().toLowerCase(),
+          )
+        )
+          after.members.push(member);
+      }
+      unsaved.current.add(name);
+      await sync.current.enqueue(name, before, after);
+      if ((await sync.current.pending(name)).length)
+        throw Error(
+          "Enregistrement encore en attente sur cet appareil. Réessaie avant de quitter.",
+        );
+      return after.members.length;
     },
     pending: () => sync.current?.pending(patrol),
     discardPending: () => sync.current?.discard(patrol),

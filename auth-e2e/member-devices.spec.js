@@ -71,11 +71,24 @@ test("laptop members and photos reach a separate phone, including wake-up and fa
     .getByLabel("Photo de Shared member", { exact: true })
     .setInputFiles("public/icons/orion-green-32.png");
   await expect.poll(() => Boolean(shared.payload.members[0].photo)).toBe(true);
-  await phone.clock.fastForward(5500);
+  await phone.clock.fastForward(10500);
   await expect(phone.locator(".member-list")).toContainText("Shared member");
   await expect(phone.locator(".member-list .avatar img")).toHaveAttribute(
     "src",
     shared.payload.members[0].photo,
+  );
+  // A previously deployed client may update payload while leaving revision unchanged.
+  shared.payload.members.push({
+    id: "legacy-writer",
+    name: "Written by older app version",
+  });
+  await phone.clock.fastForward(10500);
+  await expect(phone.locator(".member-list")).toContainText(
+    "Written by older app version",
+  );
+  await laptop.clock.fastForward(10500);
+  await expect(laptop.locator(".member-list")).toContainText(
+    "Written by older app version",
   );
   // Reverse direction: phone writes, laptop reads. A failed write must stay queued.
   shared.fail = true;
@@ -88,15 +101,15 @@ test("laptop members and photos reach a separate phone, including wake-up and fa
   await expect(phone.locator(".modal")).toContainText(
     "Modification en attente",
   );
-  expect(shared.payload.members.length).toBe(1);
+  expect(shared.payload.members.length).toBe(2);
   shared.fail = false;
   await phone.evaluate(() =>
     window.dispatchEvent(
       new PageTransitionEvent("pageshow", { persisted: true }),
     ),
   );
-  await expect.poll(() => shared.payload.members.length).toBe(2);
-  await laptop.clock.fastForward(5500);
+  await expect.poll(() => shared.payload.members.length).toBe(3);
+  await laptop.clock.fastForward(10500);
   await expect(laptop.locator(".member-list")).toContainText(
     "Member queued on phone",
   );

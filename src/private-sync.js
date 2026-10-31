@@ -145,7 +145,7 @@ export function createPrivateSync({
           status(
             operations.length
               ? "Enregistrement partagé en cours…"
-              : "À jour · enregistré et partagé avec les comptes autorisés",
+              : `À jour · enregistré et partagé avec les comptes autorisés · ${record?.payload?.members?.length || 0} membres en ligne · version ${record?.revision ?? 0}`,
             { name, pending: operations.length, error: false },
           );
         }

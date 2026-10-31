@@ -11,6 +11,7 @@ import Codes from "./Codes";
 import Photographer from "./Photographer";
 import { readLoginReturn } from "./auth-context";
 import AccessGate from "./AccessGate";
+import MemberRecovery from "./MemberRecovery";
 import usePrivateAccess from "./usePrivateAccess";
 import { privatePayload } from "./access";
 import ImageUpload from "./ImageUpload";
@@ -285,6 +286,15 @@ function App() {
           onClick={() => setModal("member")}
         >
           Connecter ce téléphone / appareil aux membres partagés
+        </button>
+      )}
+      {access.authorized && (
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => setModal("member-recovery")}
+        >
+          Synchroniser les anciens membres de cet appareil
         </button>
       )}
       {access.authorized && (
@@ -1462,6 +1472,9 @@ function App() {
             >
               <X />
             </button>
+            {modal === "member-recovery" && (
+              <MemberRecovery access={access} data={data} />
+            )}
             {modal === "member" && (
               <AccessGate access={access} patrol={patrol}>
                 {access.membersReady ? (
