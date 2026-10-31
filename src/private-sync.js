@@ -81,6 +81,7 @@ export function createPrivateSync({
   apply,
   status,
   active = () => true,
+  bootstrap = async () => null,
 }) {
   const queues = new Map(),
     jobs = new Map(),
@@ -113,6 +114,20 @@ export function createPrivateSync({
       try {
         let record = await read(name);
         if (!active()) return;
+        // Only bootstrap a never-populated record; never resurrect members after
+        // a later intentional deletion, or interfere with a pending edit.
+        if (
+          !operations.length &&
+          (!record || record.revision === 1) &&
+          !record?.payload?.members?.length
+        ) {
+          const recovery = await bootstrap(name, record);
+          if (!active()) return;
+          if (recovery) {
+            operations.push(recovery);
+            await persist(name, operations);
+          }
+        }
         while (operations.length && active()) {
           const operation = operations[0];
           let saved = false;

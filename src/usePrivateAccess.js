@@ -18,6 +18,7 @@ export default function usePrivateAccess(
   onRemote,
   section,
   ready = true,
+  localMembers = async () => [],
 ) {
   const [user, setUser] = useState(null),
     [allowed, setAllowed] = useState([]),
@@ -36,6 +37,8 @@ export default function usePrivateAccess(
     sync = useRef(null),
     owner = useRef(null),
     unsaved = useRef(new Set());
+  const recoverySource = useRef(localMembers);
+  recoverySource.current = localMembers;
   handler.current = onRemote;
   currentPatrol.current = patrol;
   useEffect(() => {
@@ -99,6 +102,12 @@ export default function usePrivateAccess(
         const key = (name) => `nexus-private-pending:${identity}:${name}`;
         sync.current = createPrivateSync({
           active: () => sessionOwner.active,
+          bootstrap: async (name, record) => {
+            const members = await recoverySource.current(name);
+            if (!members.length) return null;
+            const before = privatePayload(record?.payload || {});
+            return { before, after: { ...before, members } };
+          },
           loadQueue: (name) =>
             Promise.resolve()
               .then(() => get(key(name)))
@@ -257,6 +266,10 @@ export default function usePrivateAccess(
       verifiedIdentity === `${user.id}:${user.email}` &&
       allowed.includes(patrol) &&
       loadedPatrols.includes(patrol),
+    hasSharedAccess:
+      Boolean(user) &&
+      verifiedIdentity === `${user.id}:${user.email}` &&
+      allowed.length > 0,
     configured: Boolean(accessClient),
     user,
     allowed,

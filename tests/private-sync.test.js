@@ -207,3 +207,36 @@ test("an edit arriving during acknowledgement backup is saved without waiting fo
   assert.equal(record.payload.members[0].name, "Late member");
   assert.equal((await sync.pending("Goélands")).length, 0);
 });
+
+test("bootstrap publishes legacy local members once and does not resurrect members after later deletion", async () => {
+  let record = { revision: 1, payload: initial() };
+  let calls = 0;
+  const sync = createPrivateSync({
+    read: async () => structuredClone(record),
+    write: async (_name, payload, revision) => {
+      record = { payload, revision: revision + 1 };
+      return { revision: record.revision };
+    },
+    loadQueue: async () => [],
+    storeQueue: async () => {},
+    apply: async () => {},
+    status: () => {},
+    bootstrap: async (_name, prior) => {
+      calls++;
+      return {
+        before: prior.payload,
+        after: {
+          ...prior.payload,
+          members: [{ id: "legacy", name: "Legacy member" }],
+        },
+      };
+    },
+  });
+  await sync.synchronize("Goélands");
+  assert.equal(record.payload.members[0].name, "Legacy member");
+  assert.equal(record.payload.transactions[0].amount, 10);
+  record = { revision: 3, payload: initial() };
+  await sync.synchronize("Goélands");
+  assert.equal(record.payload.members.length, 0);
+  assert.equal(calls, 1);
+});

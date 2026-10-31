@@ -96,7 +96,11 @@ function App() {
     [patrol, selectPatrol] = useState(loginReturn.patrol || null),
     [section, setSection] = useState(loginReturn.section || "overview"),
     [tab, setTab] = useState("Réunions"),
-    [modal, setModal] = useState(null),
+    [modal, setModal] = useState(() =>
+      new URLSearchParams(window.location.search).has("sync-members")
+        ? "member-recovery"
+        : null,
+    ),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
     [saveState, setSaveState] = useState("Enregistré sur cet appareil"),
@@ -141,6 +145,21 @@ function App() {
     },
     section,
     Boolean(data),
+    async (name) => {
+      const current = dataRef.current?.patrols[name]?.members || [];
+      const history =
+        (await get(`nexus-private-backup-${name}`).catch(() => [])) || [];
+      const found = new Map();
+      for (const source of [
+        current,
+        ...history.map((b) => b.payload?.members || []),
+      ]) {
+        for (const member of source) {
+          if (!found.has(member.id)) found.set(member.id, member);
+        }
+      }
+      return [...found.values()];
+    },
   );
   const badgePhotos = useBadgePhotos({
     ready: Boolean(data),
@@ -286,15 +305,6 @@ function App() {
           onClick={() => setModal("member")}
         >
           Connecter ce téléphone / appareil aux membres partagés
-        </button>
-      )}
-      {access.authorized && (
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => setModal("member-recovery")}
-        >
-          Synchroniser les anciens membres de cet appareil
         </button>
       )}
       {access.authorized && (
@@ -511,6 +521,13 @@ function App() {
       </header>
       <main data-patrol={patrol ? patrols.indexOf(patrol) : undefined}>
         <div className="drive-toolbar">
+          <button
+            type="button"
+            className="primary"
+            onClick={() => setModal("member-recovery")}
+          >
+            Synchroniser les membres
+          </button>
           {section === "photographer" ? (
             <div className="inline-save-status">
               <Cloud size={16} /> Album public · les événements publiés sont
@@ -1473,7 +1490,12 @@ function App() {
               <X />
             </button>
             {modal === "member-recovery" && (
-              <MemberRecovery access={access} data={data} />
+              <AccessGate
+                access={{ ...access, authorized: access.hasSharedAccess }}
+                patrol="Troupe Orion"
+              >
+                <MemberRecovery access={access} data={data} />
+              </AccessGate>
             )}
             {modal === "member" && (
               <AccessGate access={access} patrol={patrol}>
@@ -1481,6 +1503,13 @@ function App() {
                   <>
                     <div className="eyebrow">LA FORCE DU COLLECTIF</div>
                     <h2>Les membres · {patrol}</h2>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => setModal("member-recovery")}
+                    >
+                      Récupérer et partager les membres enregistrés
+                    </button>
                     {inlineSaveStatus}
                     <form
                       onSubmit={async (e) => {
