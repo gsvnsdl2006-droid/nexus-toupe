@@ -1,4 +1,4 @@
-import { cloneData } from "./browser-compat.js";
+import { cloneData, randomId } from "./browser-compat.js";
 const equal = (a, b) => {
   if (a === b) return true;
   if (
@@ -85,6 +85,8 @@ export function createPrivateSync({
   status,
   active = () => true,
   bootstrap = async () => null,
+  prepare = async (operation) => operation,
+  merge = mergePrivate,
 }) {
   const queues = new Map(),
     jobs = new Map(),
@@ -134,16 +136,18 @@ export function createPrivateSync({
         }
         let deferred = 0;
         while (operations.length > deferred && active()) {
-          const operation = operations[deferred];
+          let operation = operations[deferred];
           try {
+            const prepared = await prepare(operation, name);
+            if (!active()) return;
+            if (!equal(prepared, operation)) {
+              operations[deferred] = operation = prepared;
+              await persist(name, operations).catch(() => {});
+            }
             let saved = false;
             for (let attempt = 0; attempt < 5 && active(); attempt++) {
               const payload = record
-                ? mergePrivate(
-                    operation.before,
-                    operation.after,
-                    record.payload,
-                  )
+                ? merge(operation.before, operation.after, record.payload)
                 : operation.after;
               if (record && equal(payload, record.payload)) {
                 saved = true;
@@ -231,10 +235,12 @@ export function createPrivateSync({
     async enqueue(name, before, after) {
       const operations = await queue(name);
       generations.set(name, (generations.get(name) || 0) + 1);
-      operations.push({
+      const operation = {
+        id: randomId(),
         before: cloneData(before),
         after: cloneData(after),
-      });
+      };
+      operations.push(operation);
       status("Enregistrement partagé en cours…", {
         name,
         pending: operations.length,
@@ -249,6 +255,7 @@ export function createPrivateSync({
         );
       }
       await synchronize(name);
+      return !operations.some((pending) => pending.id === operation.id);
     },
     synchronize,
     async pending(name) {

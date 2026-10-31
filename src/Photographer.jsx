@@ -105,10 +105,14 @@ export default function Photographer({
       )
         load();
     };
+    const timer = setInterval(refresh, 10000);
+    window.addEventListener("pageshow", refresh);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
+      clearInterval(timer);
+      window.removeEventListener("pageshow", refresh);
       window.removeEventListener("focus", refresh);
       window.removeEventListener("online", refresh);
       document.removeEventListener("visibilitychange", refresh);

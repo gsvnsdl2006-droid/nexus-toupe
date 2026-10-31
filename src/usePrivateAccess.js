@@ -127,7 +127,12 @@ export default function usePrivateAccess(
                 .maybeSingle(),
             );
             if (response.error) throw response.error;
-            return response.data;
+            return response.data
+              ? {
+                  ...response.data,
+                  payload: privatePayload(response.data.payload),
+                }
+              : null;
           },
           write: async (name, payload, prior) => {
             if (!sessionOwner.active || !permissions.current.includes(name))
@@ -277,10 +282,11 @@ export default function usePrivateAccess(
   return {
     loadedPatrols,
     membersReady:
-      Boolean(user) &&
-      verifiedIdentity === `${user.id}:${user.email}` &&
-      allowed.includes(patrol) &&
-      loadedPatrols.includes(patrol),
+      !accessClient ||
+      (Boolean(user) &&
+        verifiedIdentity === `${user.id}:${user.email}` &&
+        allowed.includes(patrol) &&
+        loadedPatrols.includes(patrol)),
     hasSharedAccess:
       Boolean(user) &&
       verifiedIdentity === `${user.id}:${user.email}` &&
@@ -301,6 +307,12 @@ export default function usePrivateAccess(
         unsaved.current.add(patrol);
         return sync.current.enqueue(patrol, previous, privatePayload(p));
       }
+    },
+    saveFor: (name, p, previous) => {
+      if (!sync.current || !permissions.current.includes(name))
+        return Promise.resolve(false);
+      unsaved.current.add(name);
+      return sync.current.enqueue(name, previous, privatePayload(p));
     },
     refresh: () => {
       if (!permissions.current.includes(patrol)) setAccessAttempt((n) => n + 1);

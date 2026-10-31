@@ -19,7 +19,7 @@ Playwright démarre le serveur de développement automatiquement et utilise `/us
 
 **Aucune connexion Google Drive ni synchronisation Drive.** L'ancienne intégration OAuth a été retirée. Le jeton de l'ancienne session est effacé au chargement. Les anciens fichiers Drive ne sont pas supprimés.
 
-Les saisies sont enregistrées sur l'appareil dans IndexedDB. Les rapports de réunion se téléchargent en **véritables fichiers Word .docx**, avec le rapport et le tableau des présences. Les présences se téléchargent aussi en **Excel .xlsx**, pour une réunion ou l'ensemble des réunions. L'utilisateur dépose lui-même les fichiers sur son Drive.
+Les saisies enregistrées sont partagées en ligne ; IndexedDB conserve le cache et les modifications en attente. Les rapports de réunion se téléchargent en **véritables fichiers Word .docx**, avec le rapport et le tableau des présences. Les présences se téléchargent aussi en **Excel .xlsx**, pour une réunion ou l'ensemble des réunions. L'utilisateur dépose lui-même les fichiers sur son Drive.
 
 La trésorerie affiche les dollars américains ($). Les classeurs Excel ont titres, totaux calculés, formats monétaires, tableaux filtrables et lignes alternées. Les dossiers de camp utilisent dix catégories avec exports Excel mis en page, couleurs de troupe, texte renvoyé à la ligne et réglages d'impression. Les anciennes cellules du modèle original restent exportables séparément.
 
@@ -31,7 +31,7 @@ La connexion Google via Supabase vérifie l’adresse et mémorise la session. E
 
 Les deux maîtrises confirmées sont prévues dans le SQL : `gsvnsdl2006@gmail.com` et `troupeoriongsvn@gmail.com`. Les six adresses de patrouille confirmées sont également dans le SQL. La configuration publique du projet Supabase est maintenant intégrée dans `src/project-config.js`. Les variables `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY` restent des surcharges optionnelles. Aucune clé secret/service_role ne doit apparaître dans le frontend.
 
-**Sans cette configuration, la restriction n'est pas active.** Un message l'indique dans les deux sections ; l'application conserve le mode local. Une fois configurée, une connexion Google vérifiée et une entrée d'accès côté base sont nécessaires : saisir simplement une adresse ne donne pas accès. Les clients ne peuvent pas modifier les autorisations. Les anciennes copies locales et exports ne sont pas chiffrés ou effacés par la nouvelle protection. La progression reste locale sans connexion.
+**Sans cette configuration, la restriction n'est pas active.** Un message l'indique dans les deux sections ; l'application conserve le mode local. Une fois configurée, une connexion Google vérifiée et une entrée d'accès côté base sont nécessaires : saisir simplement une adresse ne donne pas accès. Les clients ne peuvent pas modifier les autorisations. Les anciennes copies locales et exports ne sont pas chiffrés ou effacés par la nouvelle protection. La progression utilise son stockage partagé Netlify, même sans connexion Google ; les brouillons hors ligne restent sur l'appareil jusqu'à leur envoi.
 
 ## Validation
 
@@ -61,7 +61,7 @@ Use the same Netlify site for future deployments. Deleting the site/store or dep
 
 ## Progression dashboard and badge souvenirs
 
-Selecting a member displays a percentage ring and counts for 93 badges: completed, documented/in progress, and remaining. Completion is explicit (« Marquer comme terminé »); adding notes alone does not complete a badge. Promesse, 2nde classe, Première classe and Raider have separate completion indicators. These records remain in the member's local patrol data and full JSON backups.
+Selecting a member displays a percentage ring and counts for 93 badges: completed, documented/in progress, and remaining. Completion is explicit (« Marquer comme terminé »); adding notes alone does not complete a badge. Promesse, 2nde classe, Première classe and Raider have separate completion indicators. These records are shared through the progression store, with a local cache and full JSON backups.
 
 Each member can download a designed, personalized badge PDF with the badge title, name, patrol, completion date, selected cover, notes and selected achievement photos. Notes and images can be included independently. Long journals paginate; browser-rendered text preserves accents and the browser's font shaping. The PDF is a visual keepsake, with rendered page images, and can be kept outside the app. Its generated filename includes the badge and member names.
 
@@ -85,7 +85,7 @@ Codes now includes **Code des voyelles** and **Sémaphore**, with instant encodi
 
 All three accounts authorized for a patrol can create, edit and delete its transactions; member/meeting/camp and photographer deletion still retain their separate admin restrictions. The shared status distinguishes queued/error states from server-acknowledged saves and offers an explicit refresh. Records refresh on section entry, focus, visibility/online events and every 15 seconds while visible.
 
-`src/private-sync.js` saves per-account/per-patrol pending operations in IndexedDB and replays them against the latest shared revision. Independent record/field edits merge by stable IDs; compare-and-set collisions retry, and a lost acknowledgement does not duplicate a transaction. Conflicting edits to the same field remain pending, with a downloadable local operation backup and an explicit choice to discard it in favor of the shared version. An open transaction editor refuses to overwrite a transaction changed or removed since the editor opened. Existing local-only changes from an older deployment are not silently uploaded over shared records; previous local snapshots remain in Archives & exports recovery copies.
+`src/private-sync.js` saves per-account/per-patrol pending operations in IndexedDB and replays them against the latest shared revision. Independent record/field edits merge by stable IDs; compare-and-set collisions retry, and a lost acknowledgement does not duplicate a transaction. Conflicting edits to the same field remain pending, with a downloadable local operation backup and an explicit choice to discard it in favor of the shared version. Independent queued records continue saving, and the latest shared view still loads. An open transaction editor refuses to overwrite a transaction changed or removed since the editor opened. Existing local-only changes from an older deployment are not silently uploaded over shared records; previous local snapshots remain in Archives & exports recovery copies.
 
 The browser compatibility helper supplies UUID and plain-data clone fallbacks and uses AbortController timers instead of requiring `AbortSignal.timeout`. Dates are generated consistently as local YYYY-MM-DD. If IndexedDB is blocked, the app can still open online spaces and public photo albums; local/offline recovery cannot be guaranteed when a browser refuses storage. Safari fallback tests disable the modern APIs explicitly, and photo galleries are checked at phone, tablet and laptop widths.
 
@@ -95,7 +95,7 @@ Photographer viewing no longer shares the mutation rate limit: reads stay at `/p
 
 Each patrol has two additional public sections. **Secouriste** contains named first-aid kits with item quantities and optional expiry dates, shared case-study uploads (PDF/Word/PNG/JPEG/WebP, maximum 3 MiB), and incident reports. Kits and studies are stored outside deployments in the site-wide `nexus-patrol-support-v1` Netlify Blobs store. Kit edits use conditional versions so simultaneous updates are refused rather than silently overwritten.
 
-Incident reports are deliberately local to the device. Drafts autosave separately in IndexedDB; saved reports and drafts survive same-origin redeployments, but are not published to the public store or included in the main app JSON snapshot. They export as actual DOCX or visually formatted PDF, with persistent Save links for browsers that preview files. The user manually archives these files on Drive. Browsers that refuse local storage can still download a report directly from the form; local draft recovery cannot be guaranteed in that case.
+Incident drafts autosave separately in IndexedDB. Saved reports are now part of the private Supabase patrol record and the main JSON snapshot; they are never published to the public store. They export as actual DOCX or visually formatted PDF, with persistent Save links for browsers that preview files. The user manually archives these files on Drive. Browsers that refuse local storage can still download a report directly from the form; local draft recovery cannot be guaranteed in that case.
 
 **Intendance** publicly shows equipment names, photos and quantities. Only the two confirmed troop admins may add equipment, change photos or edit quantities. The write function verifies the real Supabase session and confirmed email for every equipment save; a patrol account has no write permission. Existing Google sign-in is reused and returns to the Intendance section. Equipment photographs are compressed to 450 KiB or less. No new SQL, credentials or account setup is required. The mobile patrol navigation has two rows to keep all eight sections accessible.
 
@@ -106,3 +106,36 @@ Intendance starts with the 37 names and original thumbnail photographs from the 
 Catalogue IDs are deterministic and stored overrides remain in the existing patrol-scoped Netlify store. Default records are supplied only when no saved override or same-name item exists, so importing/redeploying does not reset later admin edits or overwrite pre-existing equipment. The two admins retain Add/Modify controls; everyone else remains read-only. The editor supports unquantified items and preserves the original reference photograph when only a quantity/name is changed.
 
 Original screenshot JPEGs are retained unmodified under `public/inventory/references`. `EquipmentPhoto` displays only the appropriate original thumbnail region using an SVG clip; no replacement/AI artwork is substituted. Admin-uploaded replacement photographs continue to use the existing compressed-image storage. Equipment lists now return up to 50 entries per page so the full 37-item import is visible together; kit and study pagination is unchanged.
+
+## Shared saving across devices
+
+All saved workspace data now uses shared online storage; IndexedDB is the offline
+cache and durable pending journal, not the only copy. Private Supabase patrol
+records contain members/photos, transactions, meetings/attendance, camp dossiers
+and **incident reports**. Existing RLS continues to restrict those records to the
+two leaders and the relevant patrol account. Incident drafts and their Word/PDF
+exports remain available locally; publishing an incident requires that account.
+No new SQL migration is needed for the additional JSON field.
+
+Public progression achievements, their photos and completion/statistics data use
+`nexus-shared-workspace-v1` in Netlify Blobs. Catalogue/branding are readable by
+all devices but only the two server-verified leaders can publish edits. Existing
+public kits, case studies, equipment, photographer albums and badge covers keep
+their established stores and permissions. Saved content refreshes automatically
+on startup, focus/reconnection, and periodic checks while the section is open.
+Codes are calculators; changing a search, selected tab or unsubmitted form is not
+a shared saved record.
+
+The new store uses conditional writes and stable record IDs, with version history
+and immutable photo assets. Photos are uploaded separately so progression JSON
+contains small image URLs instead of accumulating base64 camera files. Save forms
+wait for acknowledgement; failed saves retain the queued work and show an explicit
+pending/error status. A conflict in one pending record cannot block independent
+records from saving or stop the device from showing shared data.
+
+Device-only progression from older versions is journaled automatically before
+loading its shared replacement, then merged into the relevant patrol. Open the
+app on the device holding that old work so it can be uploaded; another device
+cannot retrieve data that has never left the original browser. Importing a JSON
+backup also publishes progression and permitted private records instead of merely
+replacing the local cache. Never erase browser storage while a save is pending.

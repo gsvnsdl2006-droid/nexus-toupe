@@ -25,6 +25,7 @@ export const privateFields = [
   "meetings",
   "camp",
   "camps",
+  "incidents",
 ];
 export const privatePayload = (p) =>
   Object.fromEntries(

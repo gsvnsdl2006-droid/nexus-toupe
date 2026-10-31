@@ -1,4 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { supportStore } from "../test-support/support-store.js";
+import { sharedWorkspaceApi } from "../test-support/shared-route.js";
+test.beforeEach(async ({ context }) => {
+  await context.route(
+    "**/.netlify/functions/shared-workspace*",
+    sharedWorkspaceApi(supportStore()),
+  );
+});
 import * as XLSX from "xlsx";
 import { readFile } from "node:fs/promises";
 test("patrol workflows persist and remain isolated", async ({ page }) => {

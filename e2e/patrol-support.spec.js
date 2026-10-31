@@ -125,7 +125,7 @@ test("public first aid kits and case studies are shared; incident drafts stay lo
   await other.setViewportSize({ width: 390, height: 844 });
   await other.getByRole("button", { name: "Incident", exact: true }).click();
   await expect(
-    other.getByText("Aucun rapport enregistré sur cet appareil."),
+    other.getByText("Aucun rapport enregistré."),
   ).toBeVisible();
   await other.getByRole("button", { name: "Intendance", exact: true }).click();
   await expect(

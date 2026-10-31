@@ -13,6 +13,12 @@ import { readLoginReturn } from "./auth-context";
 import AccessGate from "./AccessGate";
 import MemberRecovery from "./MemberRecovery";
 import usePrivateAccess from "./usePrivateAccess";
+import useSharedWorkspace, {
+  progressPayload,
+  configPayload,
+} from "./useSharedWorkspace";
+import { compressEventPhoto } from "./photographer-images";
+import { memberAliases, reconcileProgression } from "./progression-members";
 import { privatePayload } from "./access";
 import ImageUpload from "./ImageUpload";
 import {
@@ -123,6 +129,8 @@ function App() {
     if (section !== "treasury") setActivityOpen(false);
   }, [section]);
   const dataRef = useRef(data);
+  const configWrites = useRef(Promise.resolve(true));
+  const transactionDraftId = useRef(uid());
   dataRef.current = data;
   const access = usePrivateAccess(
     patrol,
@@ -135,7 +143,26 @@ function App() {
       // be overwritten by the acknowledgement of an older save.
       const next = cloneData(current);
       Object.assign(next.patrols[targetPatrol], payload);
+      next.patrols[targetPatrol].memberAliases = {
+        ...current.patrols[targetPatrol].memberAliases,
+        ...memberAliases(
+          current.patrols[targetPatrol].members,
+          payload.members || [],
+        ),
+      };
+      const progressionBefore = progressPayload(current.patrols[targetPatrol]);
+      const progressionAfter = reconcileProgression(
+        progressionBefore,
+        next.patrols[targetPatrol].memberAliases,
+      );
+      Object.assign(next.patrols[targetPatrol], progressionAfter);
       replaceData(next);
+      if (
+        JSON.stringify(progressionBefore) !== JSON.stringify(progressionAfter)
+      )
+        sharedWorkspace
+          .savePatrol(targetPatrol, progressionBefore, progressionAfter)
+          .catch((e) => notify(e.message));
       // Backup storage is best effort; a full local quota must not prevent
       // displaying a successfully loaded shared roster or acknowledging it.
       try {
@@ -165,6 +192,35 @@ function App() {
       return [...found.values()];
     },
   );
+  const sharedWorkspace = useSharedWorkspace({
+    ready: Boolean(data),
+    data,
+    user: access.user,
+    onRemote: (scope, payload) => {
+      const current = dataRef.current;
+      if (!current) return;
+      const before =
+        scope === "config"
+          ? configPayload(current)
+          : progressPayload(current.patrols[patrols[Number(scope.slice(9))]]);
+      if (JSON.stringify(before) === JSON.stringify(payload)) return;
+      const next = cloneData(current);
+      if (scope === "config") Object.assign(next, payload);
+      else {
+        const name = patrols[Number(scope.slice(9))];
+        const reconciled = reconcileProgression(
+          payload,
+          current.patrols[name].memberAliases,
+        );
+        Object.assign(next.patrols[name], reconciled);
+        if (JSON.stringify(payload) !== JSON.stringify(reconciled))
+          sharedWorkspace
+            .savePatrol(name, payload, reconciled)
+            .catch((e) => notify(e.message));
+      }
+      replaceData(next);
+    },
+  });
   const badgePhotos = useBadgePhotos({
     ready: Boolean(data),
     user: access.user,
@@ -242,17 +298,50 @@ function App() {
     fn(next);
     next.updated = Math.max(Date.now(), (previous.updated || 0) + 1);
     replaceData(next);
+    if (
+      JSON.stringify(configPayload(previous)) !==
+      JSON.stringify(configPayload(next))
+    )
+      configWrites.current = sharedWorkspace
+        .saveConfig(previous, next)
+        .then((saved) => {
+          if (!saved)
+            notify(
+              "Configuration en attente de sauvegarde en ligne. Connecte un administrateur.",
+            );
+          return saved;
+        })
+        .catch((e) => {
+          notify(e.message);
+          return false;
+        });
     return next;
   }
   function patch(fn) {
-    const previous = privatePayload(dataRef.current.patrols[patrol]);
+    const previousPatrol = cloneData(dataRef.current.patrols[patrol]);
+    const previous = privatePayload(previousPatrol);
     const next = update((d) => fn(d.patrols[patrol]));
+    const jobs = [];
     if (
       access.authorized &&
       JSON.stringify(privatePayload(next.patrols[patrol])) !==
         JSON.stringify(previous)
     )
-      return access.save(next.patrols[patrol], previous);
+      jobs.push(access.save(next.patrols[patrol], previous));
+    if (
+      JSON.stringify(progressPayload(previousPatrol)) !==
+      JSON.stringify(progressPayload(next.patrols[patrol]))
+    )
+      jobs.push(
+        sharedWorkspace.savePatrol(
+          patrol,
+          previousPatrol,
+          next.patrols[patrol],
+        ),
+      );
+    return Promise.all(jobs).then((results) =>
+      results.every((r) => r !== false),
+    );
   }
   async function workbook(kind, name, snapshot = data) {
     const p = snapshot.patrols[name];
@@ -292,19 +381,26 @@ function App() {
       setBusy(false);
     }
   }
+  const progressionState =
+    sharedWorkspace.states[`progress-${patrols.indexOf(patrol)}`];
   const inlineSaveStatus = (
     <div className="inline-save-status" role="status">
       <CheckCircle2 size={17} />
       <span>
-        {!patrol && access.hasSharedAccess
-          ? access.allowed.every((name) => access.loadedPatrols.includes(name))
-            ? "Membres actualisés automatiquement sur cet appareil."
-            : "Chargement automatique des membres…"
-          : access.authorized
-            ? access.status || "Chargement de l’espace partagé…"
-            : patrol
-              ? "Copie locale de cet appareil · connecte un compte autorisé pour charger les membres et photos partagés."
-              : `${saveState}. Téléchargez vos documents pour les déposer sur Drive.`}
+        {section === "progress" || modal?.type === "progress"
+          ? progressionState?.message ||
+            "Chargement de la progression partagée…"
+          : !patrol && access.hasSharedAccess
+            ? access.allowed.every((name) =>
+                access.loadedPatrols.includes(name),
+              )
+              ? "Membres actualisés automatiquement sur cet appareil."
+              : "Chargement automatique des membres…"
+            : access.authorized
+              ? access.status || "Chargement de l’espace partagé…"
+              : patrol
+                ? "Copie locale de cet appareil · connecte un compte autorisé pour charger les membres et photos partagés."
+                : `${saveState}. Téléchargez vos documents pour les déposer sur Drive.`}
       </span>
       {!access.authorized && patrol && (
         <button
@@ -838,7 +934,28 @@ function App() {
               />
             )}
             {section === "firstaid" && (
-              <Secouriste key={patrol} patrol={patrol} />
+              <Secouriste
+                key={patrol}
+                patrol={patrol}
+                access={access}
+                incidents={p.incidents || []}
+                saveIncident={async (report) => {
+                  if (!access.membersReady) return false;
+                  await patch((p) => {
+                    p.incidents ??= [];
+                    const index = p.incidents.findIndex(
+                      (r) => r.id === report.id,
+                    );
+                    if (index < 0) p.incidents.push(report);
+                    else p.incidents[index] = report;
+                  });
+                  return !((await access.pending()) || []).some(
+                    (op) =>
+                      JSON.stringify(op.before?.incidents) !==
+                      JSON.stringify(op.after?.incidents),
+                  );
+                }}
+              />
             )}
             {section === "equipment" && (
               <Intendance
@@ -1756,8 +1873,9 @@ function App() {
                 </h2>
                 <form
                   key={modal.transaction?.id || "new-transaction"}
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
+                    if (busy) return;
                     const f = Object.fromEntries(new FormData(e.currentTarget));
                     if (
                       !f.description.trim() ||
@@ -1785,18 +1903,29 @@ function App() {
                       ...f,
                       description: f.description.trim(),
                       amount: Number(f.amount),
-                      id: modal.transaction?.id || uid(),
+                      id: modal.transaction?.id || transactionDraftId.current,
                     };
-                    patch((p) => {
-                      const index = p.transactions.findIndex(
-                        (t) => t.id === transaction.id,
-                      );
-                      if (index < 0) p.transactions.push(transaction);
-                      else p.transactions[index] = transaction;
-                    });
-                    setActivity(f.activity);
-                    setActivityOpen(true);
-                    setModal(null);
+                    setBusy(true);
+                    try {
+                      const saved = await patch((p) => {
+                        const index = p.transactions.findIndex(
+                          (t) => t.id === transaction.id,
+                        );
+                        if (index < 0) p.transactions.push(transaction);
+                        else p.transactions[index] = transaction;
+                      });
+                      setActivity(f.activity);
+                      setActivityOpen(true);
+                      if (saved) {
+                        transactionDraftId.current = uid();
+                        setModal(null);
+                      } else
+                        notify(
+                          "Opération en attente de sauvegarde en ligne. Elle reste conservée et sera réessayée automatiquement.",
+                        );
+                    } finally {
+                      setBusy(false);
+                    }
                   }}
                 >
                   <label>
@@ -1865,8 +1994,11 @@ function App() {
                       </select>
                     </label>
                   </div>
-                  <button className="primary">
-                    <Check size={16} /> Enregistrer l’opération
+                  <button className="primary" disabled={busy}>
+                    <Check size={16} />{" "}
+                    {busy
+                      ? "Enregistrement en ligne…"
+                      : "Enregistrer l’opération"}
                   </button>
                   {modal.transaction && (
                     <button
@@ -1896,14 +2028,19 @@ function App() {
                 onDelete={deleteEvent}
                 exportReport={exportMeeting}
                 exportAttendance={(m) => exportPresence([m])}
-                save={(m) => {
-                  patch((p) => {
+                save={async (m) => {
+                  const saved = await patch((p) => {
                     const i = p.meetings.findIndex((x) => x.id === m.id);
                     if (i < 0) p.meetings.push(m);
                     else p.meetings[i] = m;
                   });
-                  setModal(null);
-                  notify("Rapport et présences enregistrés sur cet appareil.");
+                  if (saved) setModal(null);
+                  notify(
+                    saved
+                      ? "Rapport et présences enregistrés en ligne et partagés."
+                      : "Rapport et présences conservés en attente de sauvegarde en ligne.",
+                  );
+                  return saved;
                 }}
               />
             )}
@@ -2013,16 +2150,25 @@ function App() {
                 entries={p.progress.filter(
                   (e) => e.member === member && e.badge === modal.badge,
                 )}
-                save={(e) => {
-                  patch((p) =>
+                save={async (e) => {
+                  const saved = await patch((p) => {
+                    if (e.id && p.progress.some((entry) => entry.id === e.id))
+                      return;
                     p.progress.push({
                       ...e,
-                      id: uid(),
+                      id: e.id || uid(),
                       member,
                       badge: modal.badge,
-                    }),
+                    });
+                  });
+                  const acknowledged =
+                    saved && (await sharedWorkspace.entrySaved(patrol, e.id));
+                  notify(
+                    acknowledged
+                      ? "Réalisation enregistrée en ligne et partagée."
+                      : "Réalisation en attente : brouillon conservé, nouvelle tentative automatique.",
                   );
-                  notify("Réalisation enregistrée.");
+                  return acknowledged;
                 }}
               />
             )}
@@ -2030,12 +2176,16 @@ function App() {
               <>
                 <div className="eyebrow">93 BADGES · CATALOGUE DE TROUPE</div>
                 <h2>Les noms officiels</h2>
+                <p role="status">
+                  {sharedWorkspace.states.config?.message ||
+                    "Chargement du catalogue partagé…"}
+                </p>
                 <p>
                   Collez la liste de votre association : un badge par ligne,
                   exactement 93. Elle sera utilisée pour toutes les patrouilles.
                 </p>
                 <form
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     const names = new FormData(e.currentTarget)
                       .get("badges")
@@ -2049,7 +2199,7 @@ function App() {
                     if (new Set(names).size !== 93)
                       return notify("Chaque badge doit avoir un nom unique.");
                     update((d) => (d.badges = names));
-                    setModal(null);
+                    if (await configWrites.current) setModal(null);
                   }}
                 >
                   <textarea
@@ -2057,8 +2207,19 @@ function App() {
                     name="badges"
                     defaultValue={data.badges.join("\n")}
                     required
+                    disabled={access.configured && !access.isLeader}
                   />
-                  <button className="primary">Enregistrer le catalogue</button>
+                  <button
+                    className="primary"
+                    disabled={access.configured && !access.isLeader}
+                  >
+                    Enregistrer le catalogue
+                  </button>
+                  {access.configured && !access.isLeader && (
+                    <p>
+                      Connecte une maîtrise pour modifier le catalogue partagé.
+                    </p>
+                  )}
                 </form>
               </>
             )}
@@ -2066,11 +2227,18 @@ function App() {
               <>
                 <div className="eyebrow">VOTRE HISTOIRE, BIEN GARDÉE</div>
                 <h2>Archives & exports</h2>
+                <p role="status">
+                  Catalogue et logos :{" "}
+                  {sharedWorkspace.states.config?.message ||
+                    "Chargement du stockage partagé…"}
+                </p>
                 <p>
-                  Les données sont enregistrées sur cet appareil. Téléchargez
-                  les rapports Word et tableaux Excel depuis les sections, puis
-                  déposez-les vous-même dans Google Drive. Exportez aussi une
-                  sauvegarde complète pour conserver les photos.
+                  Les données sont enregistrées en ligne après confirmation ;
+                  les brouillons en attente restent sur cet appareil.
+                  Téléchargez les rapports Word et tableaux Excel depuis les
+                  sections, puis déposez-les vous-même dans Google Drive.
+                  Exportez aussi une sauvegarde complète pour conserver les
+                  photos.
                 </p>
                 <div className="settings-block">
                   <h3>Les logos de la troupe</h3>
@@ -2085,6 +2253,7 @@ function App() {
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp"
+                          disabled={access.configured && !access.isLeader}
                           onChange={(e) => {
                             const file = e.target.files[0];
                             if (!file) return;
@@ -2105,6 +2274,7 @@ function App() {
                                 d.branding ??= {};
                                 d.branding[key] = image;
                               });
+                              await configWrites.current;
                             });
                           }}
                         />
@@ -2194,10 +2364,60 @@ function App() {
                               const d = JSON.parse(await file.text());
                               if (!validBackup(d))
                                 throw Error("Fichier Nexus incompatible.");
+                              const previous = cloneData(dataRef.current);
                               const restored = await recoverPhotos(d);
                               await replaceData(restored);
+                              const jobs = [];
+                              for (const name of patrols) {
+                                if (
+                                  JSON.stringify(
+                                    progressPayload(previous.patrols[name]),
+                                  ) !==
+                                  JSON.stringify(
+                                    progressPayload(restored.patrols[name]),
+                                  )
+                                )
+                                  jobs.push(
+                                    sharedWorkspace.savePatrol(
+                                      name,
+                                      previous.patrols[name],
+                                      restored.patrols[name],
+                                    ),
+                                  );
+                                if (
+                                  access.allowed.includes(name) &&
+                                  JSON.stringify(
+                                    privatePayload(previous.patrols[name]),
+                                  ) !==
+                                    JSON.stringify(
+                                      privatePayload(restored.patrols[name]),
+                                    )
+                                )
+                                  jobs.push(
+                                    access.saveFor(
+                                      name,
+                                      restored.patrols[name],
+                                      privatePayload(previous.patrols[name]),
+                                    ),
+                                  );
+                              }
+                              if (
+                                JSON.stringify(configPayload(previous)) !==
+                                JSON.stringify(configPayload(restored))
+                              )
+                                jobs.push(
+                                  sharedWorkspace.saveConfig(
+                                    previous,
+                                    restored,
+                                  ),
+                                );
+                              const results = await Promise.all(jobs);
                               badgePhotos.refresh();
-                              notify("Données importées.");
+                              notify(
+                                results.every((result) => result !== false)
+                                  ? "Copie importée ; les espaces autorisés ont été enregistrés en ligne."
+                                  : "Copie importée et conservée. Certaines sauvegardes en ligne sont encore en attente.",
+                              );
                             });
                           e.target.value = "";
                         }}
@@ -2307,6 +2527,8 @@ function MeetingForm({
     ...Object.fromEntries(members.map((m) => [m.id, "absent"])),
     ...meeting?.attendance,
   });
+  const draftMeetingId = useRef(meeting?.id || uid());
+  const [saving, setSaving] = useState(false);
   return (
     <>
       <div className="eyebrow">SECRÉTARIAT · RAPPORT & PRÉSENCES</div>
@@ -2352,10 +2574,20 @@ function MeetingForm({
         </div>
       )}
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
+          if (saving) return;
           const f = Object.fromEntries(new FormData(e.currentTarget));
-          save({ ...f, id: meeting?.id || uid(), attendance: statuses });
+          setSaving(true);
+          try {
+            await save({
+              ...f,
+              id: draftMeetingId.current,
+              attendance: statuses,
+            });
+          } finally {
+            setSaving(false);
+          }
         }}
       >
         <label>
@@ -2415,7 +2647,7 @@ function MeetingForm({
             </div>
           ))}
         </div>
-        <button className="primary">
+        <button className="primary" disabled={saving}>
           <Check size={16} /> Enregistrer rapport & présences
         </button>
       </form>
@@ -2433,6 +2665,7 @@ function ProgressForm({
   const [photos, setPhotos] = useState([]),
     [error, setError] = useState(""),
     [reading, setReading] = useState(false);
+  const draftEntryId = useRef(uid());
   return (
     <>
       <div className="eyebrow">MON CARNET DE PROGRESSION</div>
@@ -2477,13 +2710,33 @@ function ProgressForm({
         ))}
       </div>
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          const f = new FormData(e.currentTarget);
-          if (!f.get("text").trim()) return;
-          save({ date: f.get("date"), text: f.get("text").trim(), photos });
-          e.currentTarget.reset();
-          setPhotos([]);
+          const form = e.currentTarget;
+          const f = new FormData(form);
+          if (!f.get("text").trim() || reading) return;
+          setReading(true);
+          setError("");
+          try {
+            const saved = await save({
+              id: draftEntryId.current,
+              date: f.get("date"),
+              text: f.get("text").trim(),
+              photos,
+            });
+            if (saved) {
+              form.reset();
+              setPhotos([]);
+              draftEntryId.current = uid();
+            } else
+              setError(
+                "Enregistrement en ligne en attente. Ton travail est conservé ; ne le saisis pas une deuxième fois.",
+              );
+          } catch (e) {
+            setError(e.message);
+          } finally {
+            setReading(false);
+          }
         }}
       >
         <label>
@@ -2495,6 +2748,7 @@ function ProgressForm({
           <textarea
             name="text"
             rows={4}
+            maxLength={12000}
             required
             placeholder="Décris ton expérience, ce que tu as appris…"
           />
@@ -2527,7 +2781,7 @@ function ProgressForm({
                   files.map(async (f) => ({
                     id: uid(),
                     name: f.name,
-                    data: await readFile(f),
+                    data: (await compressEventPhoto(f)).data,
                   })),
                 );
                 setPhotos((v) => [...v, ...next]);

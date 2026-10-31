@@ -73,13 +73,19 @@ export default function useBadgePhotos({ ready, user, onPhotos }) {
       refresh();
       setTick((n) => n + 1);
     };
+    const interval = setInterval(() => {
+      if (ready && document.visibilityState !== "hidden") refresh();
+    }, 15000);
+    window.addEventListener("pageshow", resume);
     window.addEventListener("online", resume);
     window.addEventListener("focus", resume);
     return () => {
+      clearInterval(interval);
+      window.removeEventListener("pageshow", resume);
       window.removeEventListener("online", resume);
       window.removeEventListener("focus", resume);
     };
-  }, []);
+  }, [ready]);
   useEffect(() => {
     if (!ready) return;
     async function upload() {

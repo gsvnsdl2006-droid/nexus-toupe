@@ -336,7 +336,9 @@ const emptyIncident = () => ({
   followup: "",
 });
 const incidentDraftWrites = new Map();
-function Incidents({ patrol }) {
+function Incidents({ patrol, access, shared = [], saveShared }) {
+  const legacy = useRef([]),
+    migrated = useRef(false);
   const [records, setRecords] = useState([]),
     [draft, setDraft] = useState(null),
     [ready, setReady] = useState(false),
@@ -352,7 +354,8 @@ function Incidents({ patrol }) {
       .then(() => Promise.all([get(key), get(`${key}:draft`)]))
       .then(([saved, savedDraft]) => {
         if (active) {
-          setRecords(Array.isArray(saved) ? saved : []);
+          legacy.current = Array.isArray(saved) ? saved : [];
+          setRecords(legacy.current);
           if (savedDraft?.id) setDraft(savedDraft);
         }
       })
@@ -377,13 +380,24 @@ function Incidents({ patrol }) {
     incidentDraftWrites.set(key, task);
     task.catch(() => {});
   }, [draft, ready, key]);
+  useEffect(() => {
+    if (!access?.membersReady || !ready) return;
+    setRecords(shared);
+    if (!migrated.current && legacy.current.length) {
+      migrated.current = true;
+      (async () => {
+        for (const report of legacy.current)
+          if (!shared.some((r) => r.id === report.id)) await saveShared(report);
+      })().catch((e) => setError(e.message));
+    }
+  }, [shared, ready, access?.membersReady]);
   return (
     <>
       <h3>Incident · rapport d’événement</h3>
       <p className="hint">
-        Ces rapports restent sur cet appareil. Télécharge-les en Word ou PDF
-        pour les déposer manuellement sur Drive ; ils ne sont pas publiés dans
-        l’espace public.
+        Les rapports enregistrés en ligne sont partagés uniquement avec les
+        comptes autorisés de la patrouille. Les brouillons restent sur cet
+        appareil. Tu peux aussi les télécharger en Word ou PDF pour Drive.
       </p>
       <button
         className="primary"
@@ -404,15 +418,35 @@ function Incidents({ patrol }) {
             setError("");
             const next = [draft, ...records.filter((r) => r.id !== draft.id)];
             try {
-              await set(key, next);
+              try {
+                await set(key, next);
+              } catch (error) {
+                if (!access?.configured) throw error;
+              }
+              if (access?.configured && !access?.membersReady) {
+                setNotice(
+                  "Brouillon conservé. Connecte le compte de la patrouille ou une maîtrise pour enregistrer le rapport en ligne.",
+                );
+                await access?.signInGoogle();
+                return;
+              }
+              if (access?.configured && !(await saveShared(draft))) {
+                setError(
+                  "Rapport conservé en attente. Nouvelle tentative automatique avec la connexion Internet.",
+                );
+                return;
+              }
               setRecords(next);
               setDraft(null);
               setNotice(
-                "Rapport enregistré sur cet appareil. Tu peux télécharger les fichiers pour Drive.",
+                access?.configured
+                  ? "Rapport enregistré en ligne, disponible sur les appareils autorisés."
+                  : "Copie locale enregistrée · connexion partagée non configurée.",
               );
-            } catch {
+            } catch (error) {
               setError(
-                "Enregistrement local impossible. Ton texte reste dans le formulaire : télécharge-le directement ci-dessous.",
+                error.message ||
+                  "Enregistrement impossible. Ton texte reste dans le formulaire ; réessaie ou télécharge-le ci-dessous.",
               );
             } finally {
               setSaving(false);
@@ -462,7 +496,9 @@ function Incidents({ patrol }) {
             <button className="primary" disabled={saving}>
               {saving
                 ? "Enregistrement…"
-                : "Enregistrer le rapport sur cet appareil"}
+                : access?.configured
+                  ? "Enregistrer le rapport en ligne"
+                  : "Enregistrer le rapport sur cet appareil"}
             </button>
             <button
               type="button"
@@ -499,9 +535,7 @@ function Incidents({ patrol }) {
         </p>
       )}
       {!records.length && !draft && ready && (
-        <p className="support-empty">
-          Aucun rapport enregistré sur cet appareil.
-        </p>
+        <p className="support-empty">Aucun rapport enregistré.</p>
       )}
       <div className="support-records">
         {records.map((report) => (
@@ -538,7 +572,12 @@ function Incidents({ patrol }) {
     </>
   );
 }
-export default function Secouriste({ patrol }) {
+export default function Secouriste({
+  patrol,
+  access,
+  incidents,
+  saveIncident,
+}) {
   const [tab, setTab] = useState("kit");
   return (
     <section className="patrol-support" aria-label="Secouriste">
@@ -570,7 +609,14 @@ export default function Secouriste({ patrol }) {
       </div>
       {tab === "kit" && <FirstAidKits patrol={patrol} />}
       {tab === "cases" && <CaseStudies patrol={patrol} />}
-      {tab === "incident" && <Incidents patrol={patrol} />}
+      {tab === "incident" && (
+        <Incidents
+          patrol={patrol}
+          access={access}
+          shared={incidents}
+          saveShared={saveIncident}
+        />
+      )}
     </section>
   );
 }

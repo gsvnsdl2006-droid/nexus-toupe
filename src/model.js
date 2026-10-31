@@ -33,6 +33,7 @@ export const initial = () => ({
         camp: {},
         camps: [],
         progress: [],
+        incidents: [],
       },
     ]),
   ),

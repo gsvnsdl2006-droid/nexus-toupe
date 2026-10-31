@@ -64,10 +64,18 @@ export default function useSupportRecords(patrol, section) {
     const refresh = () => {
       if (document.visibilityState !== "hidden") load();
     };
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "hidden") load();
+    }, 10000);
+    window.addEventListener("pageshow", refresh);
+    document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
     return () => {
       generation.current++;
+      clearInterval(timer);
+      window.removeEventListener("pageshow", refresh);
+      document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
       window.removeEventListener("online", refresh);
     };

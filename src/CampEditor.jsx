@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Plus,
   ArrowLeft,
@@ -29,6 +29,8 @@ export default function CampEditor({
     [draft, setDraft] = useState({}),
     [dirty, setDirty] = useState(false),
     [creating, setCreating] = useState(false);
+  const draftId = useRef(uid());
+  const [saving, setSaving] = useState(false);
   const camp = camps.find((c) => c.id === selected);
   useEffect(() => {
     setDraft(camp?.fields || {});
@@ -44,15 +46,17 @@ export default function CampEditor({
       return;
     fn();
   }
-  function saveCategory(e) {
+  async function saveCategory(e) {
     e.preventDefault();
-    save({
+    setSaving(true);
+    const saved = await save({
       ...camp,
       title: draft.title?.trim() || camp.title,
       fields: draft,
       updated: Math.max(Date.now(), (camp.updated || 0) + 1),
     });
-    setDirty(false);
+    setSaving(false);
+    if (saved !== false) setDirty(false);
   }
   return (
     <div className="camp-editor">
@@ -66,7 +70,13 @@ export default function CampEditor({
           </p>
         </div>
         {!camp && (
-          <button className="primary" onClick={() => setCreating(true)}>
+          <button
+            className="primary"
+            onClick={() => {
+              draftId.current = uid();
+              setCreating(true);
+            }}
+          >
             <Plus size={17} />
             Nouveau dossier
           </button>
@@ -85,12 +95,15 @@ export default function CampEditor({
       {creating && (
         <form
           className="camp-create"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const title = new FormData(e.currentTarget).get("name").trim();
             if (!title) return;
-            const c = createCamp(uid(), title, today());
-            save(c);
+            const c = createCamp(draftId.current, title, today());
+            setSaving(true);
+            const saved = await save(c);
+            setSaving(false);
+            if (saved === false) return;
             select(c.id);
             choose(null);
             setCreating(false);
@@ -106,7 +119,7 @@ export default function CampEditor({
             />
           </label>
           <div className="actions">
-            <button className="primary">
+            <button className="primary" disabled={saving}>
               <FolderOpen size={16} />
               Créer le dossier
             </button>
@@ -268,7 +281,7 @@ export default function CampEditor({
                   </label>
                 ))}
               <div className="camp-save">
-                <button className="primary">
+                <button className="primary" disabled={saving}>
                   <Check size={17} />
                   Enregistrer la catégorie
                 </button>
