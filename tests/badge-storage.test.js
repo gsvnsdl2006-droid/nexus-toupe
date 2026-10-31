@@ -93,30 +93,17 @@ test("a stale local image cannot overwrite another saved image and unauthorized 
     400,
   );
 });
-test("photo upload authorization validates the server session and troop access, not client-claimed emails", async () => {
-  assert.equal((await authorize(new Request("https://app.test"))).status, 401);
-  const r = new Request("https://app.test", {
-    headers: { Authorization: "Bearer invalid" },
-  });
-  assert.equal(
-    (await authorize(r, async () => new Response("{}", { status: 401 })))
-      .status,
-    401,
-  );
-  const response = await authorize(r, async (url) =>
-    Response.json(
-      url.includes("/auth/v1/user")
-        ? { id: "verified", email: "outsider@example.com" }
-        : [],
-    ),
-  );
-  assert.equal(response.status, 403);
-  const approved = await authorize(r, async (url) =>
-    Response.json(
-      url.includes("/auth/v1/user")
-        ? { id: "verified", email: "leader@example.com" }
-        : [{ patrol: "Goélands" }],
-    ),
-  );
-  assert.equal(approved.ok, true);
+test("anonymous badge cover edits use the same durable public store", async () => {
+  const store = memoryStore();
+  const handler = createBadgeHandler({ store: () => store, authorize });
+  const response = await handler(new Request("https://app.test/.netlify/functions/badge-images?badge=4", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: a, expectedVersion: null }),
+  }));
+  assert.equal(response.status, 200);
+  const otherDevice = createBadgeHandler({ store: () => store, authorize });
+  const listed = await (await otherDevice(new Request("https://app.test/.netlify/functions/badge-images"))).json();
+  assert.equal(listed.images.length, 1);
+  assert.equal(listed.images[0].badge, 4);
 });

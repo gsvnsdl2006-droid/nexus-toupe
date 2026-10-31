@@ -10,7 +10,7 @@ async function media(page, cloud) {
     const r = route.request(),
       url = new URL(r.url());
     if (r.method() === "PUT") {
-      expect(r.headers().authorization).toMatch(/^Bearer /);
+      expect(r.headers().authorization).toBeUndefined();
       const body = r.postDataJSON();
       const badge = Number(url.searchParams.get("badge")),
         version = createHash("sha256").update(body.image).digest("hex");
@@ -38,7 +38,7 @@ async function badge(page) {
   await page.getByRole("button", { name: "Progression", exact: true }).click();
   return page.locator(".badge-card").filter({ hasText: "Ami de Dieu" });
 }
-test("local legacy badge pictures back up after sign-in and survive a fresh browser/redeployment", async ({
+test("local legacy badge pictures back up without sign-in and survive a fresh browser/redeployment", async ({
   page,
   browser,
 }) => {
@@ -57,12 +57,6 @@ test("local legacy badge pictures back up after sign-in and survive a fresh brow
   const card = await badge(page);
   await expect(card.locator("img")).toHaveCount(1);
   await card.click();
-  await page
-    .getByRole("button", {
-      name: "Connecter Google pour protéger les photos",
-      exact: true,
-    })
-    .click();
   await expect.poll(() => cloud.size).toBe(1);
   await expect
     .poll(async () => {

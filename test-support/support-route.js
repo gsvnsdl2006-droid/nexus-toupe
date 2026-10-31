@@ -1,9 +1,9 @@
 import { createPatrolSupportHandler } from "../netlify/lib/patrol-support.js";
 import { authorizeLeader } from "../netlify/lib/leader-auth.js";
-export function supportApi(store, email) {
+export function supportApi(store, email, { publicEdits = true } = {}) {
   const handler = createPatrolSupportHandler({
     store: () => store,
-    authorizeAdmin: email
+    authorizeAdmin: publicEdits ? async () => ({ ok: true }) : email
       ? (request) =>
           authorizeLeader(request, async () =>
             Response.json({

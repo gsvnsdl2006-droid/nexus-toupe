@@ -90,7 +90,7 @@ export function createPrivateSync({
 }) {
   const queues = new Map(),
     jobs = new Map(),
-        refreshes = new Set(),
+    refreshes = new Set(),
     persistence = new Map(),
     generations = new Map();
   async function queue(name) {
@@ -112,7 +112,9 @@ export function createPrivateSync({
     return next;
   }
   async function synchronize(name) {
-        if (jobs.has(name)) {
+    if (jobs.has(name)) {
+      // A poll or wake-up can arrive after the active read took its snapshot.
+      // Remember it so that snapshot cannot swallow the newer refresh.
       refreshes.add(name);
       return jobs.get(name);
     }
@@ -226,11 +228,11 @@ export function createPrivateSync({
       await task;
     } finally {
       jobs.delete(name);
-      // An edit may arrive while apply() is backing up the previous snapshot.
-      // Do not leave that edit waiting for the next polling interval.
+      // An edit or refresh may arrive while apply() backs up an older snapshot.
+      // Complete that work without waiting for another polling interval.
       if (
         active() &&
-                (refreshes.has(name) ||
+        (refreshes.has(name) ||
           ((generations.get(name) || 0) !== started &&
             (await queue(name)).length))
       )

@@ -13,6 +13,16 @@ export default function AccessGate({ access, patrol, children }) {
       setBusy(false);
     }
   }
+  if (access.canView)
+    return (
+      <>
+        <div className="access-session" role="status">
+          <Shield size={16} />
+          <span>Espace partagé public · {access.status || "Chargement des données partagées…"}</span>
+        </div>
+        {children}
+      </>
+    );
   if (!access.configured)
     return (
       <>

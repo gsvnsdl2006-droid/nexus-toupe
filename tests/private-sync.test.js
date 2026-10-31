@@ -12,6 +12,45 @@ const initial = () => ({
   camp: {},
   transactions: [{ id: "a", amount: 10, description: "Initial" }],
 });
+test("a refresh during an active sync reads the latest server snapshot afterwards", async () => {
+  let record = { revision: 1, payload: initial() };
+  let release, entered;
+  const blocked = new Promise((resolve) => {
+    release = resolve;
+  });
+  const applying = new Promise((resolve) => {
+    entered = resolve;
+  });
+  let reads = 0, visible;
+  const sync = createPrivateSync({
+    read: async () => {
+      reads++;
+      return structuredClone(record);
+    },
+    write: async () => {
+      throw Error("A refresh must not write");
+    },
+    loadQueue: async () => [],
+    storeQueue: async () => {},
+    status: () => {},
+    apply: async (payload) => {
+      visible = payload;
+      if (reads === 1) {
+        entered();
+        await blocked;
+      }
+    },
+  });
+  const first = sync.synchronize("Goélands");
+  await applying;
+  // Older deployed clients may leave the revision unchanged.
+  record.payload.members.push({ id: "phone", name: "Saved on phone" });
+  const refresh = sync.synchronize("Goélands");
+  release();
+  await Promise.all([first, refresh]);
+  assert.equal(reads, 2);
+  assert.equal(visible.members[0].name, "Saved on phone");
+});
 function engine(server, disk = new Map()) {
   const result = { applied: null, info: null };
   result.sync = createPrivateSync({

@@ -395,8 +395,8 @@ function Incidents({ patrol, access, shared = [], saveShared }) {
     <>
       <h3>Incident · rapport d’événement</h3>
       <p className="hint">
-        Les rapports enregistrés en ligne sont partagés uniquement avec les
-        comptes autorisés de la patrouille. Les brouillons restent sur cet
+        Les rapports enregistrés en ligne sont visibles et modifiables par
+        tous les visiteurs de la patrouille. Les brouillons restent sur cet
         appareil. Tu peux aussi les télécharger en Word ou PDF pour Drive.
       </p>
       <button
@@ -425,9 +425,8 @@ function Incidents({ patrol, access, shared = [], saveShared }) {
               }
               if (access?.configured && !access?.membersReady) {
                 setNotice(
-                  "Brouillon conservé. Connecte le compte de la patrouille ou une maîtrise pour enregistrer le rapport en ligne.",
+                  "Brouillon conservé. Le chargement du stockage partagé doit terminer avant l’enregistrement.",
                 );
-                await access?.signInGoogle();
                 return;
               }
               if (access?.configured && !(await saveShared(draft))) {
@@ -440,7 +439,7 @@ function Incidents({ patrol, access, shared = [], saveShared }) {
               setDraft(null);
               setNotice(
                 access?.configured
-                  ? "Rapport enregistré en ligne, disponible sur les appareils autorisés."
+                  ? "Rapport enregistré en ligne, partagé sur tous les appareils."
                   : "Copie locale enregistrée · connexion partagée non configurée.",
               );
             } catch (error) {

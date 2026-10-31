@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Package, Plus, RefreshCw } from "lucide-react";
 import { patrols } from "./model";
 import { randomId, fetchWithTimeout } from "./browser-compat";
-import { isLeader } from "./leader-policy";
 import { compressEventPhoto } from "./photographer-images";
 import useSupportRecords from "./useSupportRecords";
 import EquipmentPhoto from "./EquipmentPhoto";
@@ -14,9 +13,8 @@ const fresh = () => ({
   image: "",
   expectedVersion: null,
 });
-export default function Intendance({ patrol, user, onSignIn }) {
-  const state = useSupportRecords(patrols.indexOf(patrol), "equipment"),
-    admin = isLeader(user);
+export default function Intendance({ patrol }) {
+  const state = useSupportRecords(patrols.indexOf(patrol), "equipment");
   const [draft, setDraft] = useState(null),
     [processing, setProcessing] = useState(false),
     [opening, setOpening] = useState(false);
@@ -79,40 +77,19 @@ export default function Intendance({ patrol, user, onSignIn }) {
           <RefreshCw size={16} /> Actualiser le matériel
         </button>
       </div>
-      {admin ? (
-        <button
+      <button
           className="primary"
           onClick={() => setDraft(fresh())}
           disabled={state.saving || processing || opening}
         >
           <Plus size={17} /> Ajouter du matériel
         </button>
-      ) : (
-        <p className="hint">
-          Liste consultable par tous. Seuls les deux administrateurs ajoutent ou
-          modifient le matériel.
-        </p>
-      )}
-      {!admin && onSignIn && (
-        <button
-          className="secondary"
-          onClick={async () => {
-            try {
-              await onSignIn();
-            } catch (e) {
-              state.setError(e.message);
-            }
-          }}
-        >
-          Connexion administrateur
-        </button>
-      )}
-      {admin && draft && (
+      {draft && (
         <form
           className="support-form"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (await state.save(draft, true)) setDraft(null);
+            if (await state.save(draft)) setDraft(null);
           }}
         >
           <h3>
@@ -236,7 +213,6 @@ export default function Intendance({ patrol, user, onSignIn }) {
                   </>
                 )}
               </p>
-              {admin && (
                 <button
                   className="secondary"
                   disabled={state.saving || processing || opening}
@@ -245,7 +221,6 @@ export default function Intendance({ patrol, user, onSignIn }) {
                 >
                   Modifier
                 </button>
-              )}
             </div>
           </article>
         ))}

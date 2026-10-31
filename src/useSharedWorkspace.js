@@ -5,8 +5,6 @@ import { mergeWorkspace } from "./shared-merge";
 import { cloneData, fetchWithTimeout } from "./browser-compat";
 import { patrols } from "./model";
 import { badges as officialBadges } from "./badges";
-import { accessClient } from "./access";
-import { isLeader } from "./leader-policy";
 export const progressPayload = (p) => ({
   progress: p?.progress || [],
   badgeCompletions: p?.badgeCompletions || {},
@@ -33,16 +31,6 @@ export default function useSharedWorkspace({ ready, data, user, onRemote }) {
   session.current = user;
   async function request(scope, options = {}) {
     const headers = { ...(options.headers || {}) };
-    if (options.method && scope === "config") {
-      if (!isLeader(session.current))
-        throw Error(
-          "Connecte un administrateur pour partager le catalogue et les logos.",
-        );
-      const auth = await accessClient.auth.getSession();
-      if (!auth.data.session?.access_token)
-        throw Error("Session expirée. Reconnecte-toi.");
-      headers.Authorization = `Bearer ${auth.data.session.access_token}`;
-    }
     const response = await fetchWithTimeout(
       `/.netlify/functions/${options.method ? "shared-workspace-write" : "shared-workspace"}?scope=${scope}${options.asset ? "&asset=upload" : ""}`,
       { ...options, headers, cache: "no-store" },

@@ -307,7 +307,7 @@ function App() {
         .then((saved) => {
           if (!saved)
             notify(
-              "Configuration en attente de sauvegarde en ligne. Connecte un administrateur.",
+              "Configuration en attente de sauvegarde en ligne. Réessaie avec une connexion Internet.",
             );
           return saved;
         })
@@ -320,10 +320,23 @@ function App() {
   function patch(fn) {
     const previousPatrol = cloneData(dataRef.current.patrols[patrol]);
     const previous = privatePayload(previousPatrol);
-    const next = update((d) => fn(d.patrols[patrol]));
+    const candidate = cloneData(previousPatrol);
+    fn(candidate);
+    const changesRestrictedSection = ["transactions", "meetings", "camp", "camps"].some(
+      (field) => JSON.stringify(candidate[field]) !== JSON.stringify(previousPatrol[field]),
+    );
+    if (access.configured && !access.authorized && changesRestrictedSection) {
+      notify(
+        "La trésorerie et le secrétariat sont réservés aux deux administrateurs et à l’adresse assignée de cette patrouille.",
+      );
+      return Promise.resolve(false);
+    }
+    const next = update((d) => {
+      d.patrols[patrol] = candidate;
+    });
     const jobs = [];
     if (
-      access.authorized &&
+      (access.authorized || access.publicRead) &&
       JSON.stringify(privatePayload(next.patrols[patrol])) !==
         JSON.stringify(previous)
     )
@@ -390,8 +403,10 @@ function App() {
         {section === "progress" || modal?.type === "progress"
           ? progressionState?.message ||
             "Chargement de la progression partagée…"
+          : access.publicRead && !["treasury", "secretary"].includes(section)
+            ? access.status || "Chargement de l’espace partagé…"
           : !patrol && access.hasSharedAccess
-            ? access.allowed.every((name) =>
+            ? access.viewable.every((name) =>
                 access.loadedPatrols.includes(name),
               )
               ? "Membres actualisés automatiquement sur cet appareil."
@@ -841,7 +856,7 @@ function App() {
                       <div className="card-bottom">
                         <span>
                           <Users size={14} />
-                          {access.allowed.includes(name) &&
+                          {access.viewable.includes(name) &&
                           !access.loadedPatrols.includes(name)
                             ? "Chargement…"
                             : `${q.members.length} membres`}
@@ -1626,7 +1641,7 @@ function App() {
               </AccessGate>
             )}
             {modal === "member" && (
-              <AccessGate access={access} patrol={patrol}>
+              <AccessGate access={{ ...access, canView: access.publicRead, authorized: access.publicRead || access.authorized }} patrol={patrol}>
                 {access.membersReady ? (
                   <>
                     <div className="eyebrow">LA FORCE DU COLLECTIF</div>
@@ -1654,7 +1669,7 @@ function App() {
                           return notify("Ce nom existe déjà.");
                         if (!access.membersReady)
                           return notify(
-                            "Connecte-toi et attends le chargement de la liste partagée.",
+                            "Attends le chargement de la liste partagée.",
                           );
                         setSavingMember(true);
                         try {
@@ -2065,8 +2080,7 @@ function App() {
                 />
                 <div className="photo-backup-status" role="status">
                   <strong>{badgePhotos.status}</strong>
-                  {badgePhotos.conflicts.includes(modal.badge) &&
-                    access.user && (
+                  {badgePhotos.conflicts.includes(modal.badge) && (
                       <button
                         className="secondary"
                         onClick={() => {
@@ -2086,14 +2100,6 @@ function App() {
                       {badgePhotos.pending} photo(s) en attente de sauvegarde
                       permanente.
                     </span>
-                  )}
-                  {!access.user && (
-                    <button
-                      className="secondary"
-                      onClick={() => run(() => access.signInGoogle())}
-                    >
-                      Connecter Google pour protéger les photos
-                    </button>
                   )}
                   <button className="text-btn" onClick={badgePhotos.refresh}>
                     Vérifier la sauvegarde
@@ -2207,19 +2213,8 @@ function App() {
                     name="badges"
                     defaultValue={data.badges.join("\n")}
                     required
-                    disabled={access.configured && !access.isLeader}
                   />
-                  <button
-                    className="primary"
-                    disabled={access.configured && !access.isLeader}
-                  >
-                    Enregistrer le catalogue
-                  </button>
-                  {access.configured && !access.isLeader && (
-                    <p>
-                      Connecte une maîtrise pour modifier le catalogue partagé.
-                    </p>
-                  )}
+                  <button className="primary">Enregistrer le catalogue</button>
                 </form>
               </>
             )}
@@ -2253,7 +2248,6 @@ function App() {
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp"
-                          disabled={access.configured && !access.isLeader}
                           onChange={(e) => {
                             const file = e.target.files[0];
                             if (!file) return;
@@ -2287,7 +2281,7 @@ function App() {
                   <p>
                     Les photos sont conservées dans un coffre local indépendant
                     des imports et sauvegardées dans le stockage permanent du
-                    site avec un compte de troupe connecté. Elles ne sont pas
+                    site, sans connexion obligatoire. Elles ne sont pas
                     rangées dans les fichiers de déploiement.
                   </p>
                   <p className="photo-backup-status" role="status">
@@ -2315,14 +2309,7 @@ function App() {
                     <button className="secondary" onClick={badgePhotos.refresh}>
                       Vérifier la sauvegarde distante
                     </button>
-                    {!access.user && access.configured && (
-                      <button
-                        className="primary"
-                        onClick={() => run(() => access.signInGoogle())}
-                      >
-                        Connecter mon compte pour protéger les photos
-                      </button>
-                    )}
+
                   </div>
                   <p className="hint">
                     Sur un nouvel appareil, les photos déjà sauvegardées se
