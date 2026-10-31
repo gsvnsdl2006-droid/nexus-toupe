@@ -136,12 +136,16 @@ function App() {
       const next = cloneData(current);
       Object.assign(next.patrols[targetPatrol], payload);
       replaceData(next);
-      const key = `nexus-private-backup-${targetPatrol}`;
-      const history = (await get(key)) || [];
-      await set(
-        key,
-        [{ date: Date.now(), payload: previous }, ...history].slice(0, 3),
-      );
+      // Backup storage is best effort; a full local quota must not prevent
+      // displaying a successfully loaded shared roster or acknowledging it.
+      try {
+        const key = `nexus-private-backup-${targetPatrol}`;
+        const history = (await get(key)) || [];
+        await set(
+          key,
+          [{ date: Date.now(), payload: previous }, ...history].slice(0, 3),
+        );
+      } catch {}
     },
     section,
     Boolean(data),
@@ -292,11 +296,15 @@ function App() {
     <div className="inline-save-status" role="status">
       <CheckCircle2 size={17} />
       <span>
-        {access.authorized
-          ? access.status || "Chargement de l’espace partagé…"
-          : patrol
-            ? "Copie locale de cet appareil · connecte un compte autorisé pour charger les membres et photos partagés."
-            : `${saveState}. Téléchargez vos documents pour les déposer sur Drive.`}
+        {!patrol && access.hasSharedAccess
+          ? access.allowed.every((name) => access.loadedPatrols.includes(name))
+            ? "Membres actualisés automatiquement sur cet appareil."
+            : "Chargement automatique des membres…"
+          : access.authorized
+            ? access.status || "Chargement de l’espace partagé…"
+            : patrol
+              ? "Copie locale de cet appareil · connecte un compte autorisé pour charger les membres et photos partagés."
+              : `${saveState}. Téléchargez vos documents pour les déposer sur Drive.`}
       </span>
       {!access.authorized && patrol && (
         <button
@@ -526,7 +534,7 @@ function App() {
             className="primary"
             onClick={() => setModal("member-recovery")}
           >
-            Synchroniser les membres
+            Sauvegardes des membres
           </button>
           {section === "photographer" ? (
             <div className="inline-save-status">
@@ -1536,7 +1544,14 @@ function App() {
                           await patch((p) =>
                             p.members.push({ id: uid(), name }),
                           );
-                          if (!(await access.pending())?.length) form.reset();
+                          const memberPending = (
+                            (await access.pending()) || []
+                          ).some(
+                            (op) =>
+                              JSON.stringify(op.before?.members) !==
+                              JSON.stringify(op.after?.members),
+                          );
+                          if (!memberPending) form.reset();
                           else
                             notify(
                               "Modification conservée sur cet appareil, mais pas encore partagée. Réessaie avec une connexion Internet avant de quitter.",

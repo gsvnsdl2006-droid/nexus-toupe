@@ -240,3 +240,37 @@ test("bootstrap publishes legacy local members once and does not resurrect membe
   assert.equal(record.payload.members.length, 0);
   assert.equal(calls, 1);
 });
+
+test("a pending transaction conflict never hides shared members or blocks new member saves", async () => {
+  const before = initial(),
+    remote = structuredClone(before),
+    mine = structuredClone(before);
+  remote.members = [
+    {
+      id: "on-server",
+      name: "Shared member",
+      photo: "data:image/png;base64,shared",
+    },
+  ];
+  remote.transactions[0].amount = 30;
+  mine.transactions[0].amount = 20;
+  const disk = new Map([["Goélands", [{ before, after: mine }]]]);
+  const server = { record: { payload: remote, revision: 4 } };
+  const client = engine(server, disk);
+  await client.sync.synchronize("Goélands");
+  assert.equal(client.applied.members[0].name, "Shared member");
+  assert.equal(client.applied.members[0].photo, remote.members[0].photo);
+  assert.equal(client.applied.transactions[0].amount, 30);
+  assert.equal(client.info.conflict, true);
+  assert.equal(client.info.loaded, true);
+  const next = structuredClone(client.applied);
+  next.members.push({ id: "new-member", name: "New from phone" });
+  await client.sync.enqueue("Goélands", client.applied, next);
+  assert.equal(server.record.payload.members.length, 2);
+  assert.equal(server.record.payload.transactions[0].amount, 30);
+  assert.equal((await client.sync.pending("Goélands")).length, 1);
+  assert.equal(
+    (await client.sync.pending("Goélands"))[0].after.transactions[0].amount,
+    20,
+  );
+});

@@ -49,7 +49,7 @@ for (const width of [390, 1440])
     );
     await page.goto("/");
     await page
-      .getByRole("button", { name: "Synchroniser les membres", exact: true })
+      .getByRole("button", { name: "Sauvegardes des membres", exact: true })
       .click();
     await page
       .getByRole("button", { name: "Continue with Google", exact: true })

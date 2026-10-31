@@ -161,7 +161,7 @@ export default function usePrivateAccess(
             if (!sessionOwner.active) return;
             if (info.pending) unsaved.current.add(info.name);
             else unsaved.current.delete(info.name);
-            if (!info.error && !info.pending)
+            if (info.loaded || (!info.error && !info.pending))
               setLoadedPatrols((old) =>
                 old.includes(info.name) ? old : [...old, info.name],
               );

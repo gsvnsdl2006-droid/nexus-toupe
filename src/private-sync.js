@@ -31,7 +31,7 @@ export class SyncConflict extends Error {
     this.path = path;
   }
 }
-export function mergePrivate(base, local, remote, path = "") {
+export function mergePrivate(base, local, remote, path = "", preview = false) {
   if (equal(local, base)) return cloneData(remote);
   if (equal(remote, base) || equal(local, remote)) return cloneData(local);
   if (
@@ -50,6 +50,7 @@ export function mergePrivate(base, local, remote, path = "") {
         mine.get(id),
         theirs.get(id),
         `${path}/${id}`,
+        preview,
       );
       return merged === undefined ? [] : [merged];
     });
@@ -66,11 +67,13 @@ export function mergePrivate(base, local, remote, path = "") {
         local[key],
         remote[key],
         `${path}/${key}`,
+        preview,
       );
       if (value !== undefined) merged[key] = value;
     }
     return merged;
   }
+  if (preview) return cloneData(remote);
   throw new SyncConflict(path);
 }
 export function createPrivateSync({
@@ -111,8 +114,9 @@ export function createPrivateSync({
     const task = (async () => {
       const operations = await queue(name);
       if (!active()) return;
+      let record;
       try {
-        let record = await read(name);
+        record = await read(name);
         if (!active()) return;
         // Only bootstrap a never-populated record; never resurrect members after
         // a later intentional deletion, or interfere with a pending edit.
@@ -125,36 +129,51 @@ export function createPrivateSync({
           if (!active()) return;
           if (recovery) {
             operations.push(recovery);
-            await persist(name, operations);
+            await persist(name, operations).catch(() => {});
           }
         }
-        while (operations.length && active()) {
-          const operation = operations[0];
-          let saved = false;
-          for (let attempt = 0; attempt < 5 && active(); attempt++) {
-            const payload = record
-              ? mergePrivate(operation.before, operation.after, record.payload)
-              : operation.after;
-            if (record && equal(payload, record.payload)) {
-              saved = true;
-              break;
+        let deferred = 0;
+        while (operations.length > deferred && active()) {
+          const operation = operations[deferred];
+          try {
+            let saved = false;
+            for (let attempt = 0; attempt < 5 && active(); attempt++) {
+              const payload = record
+                ? mergePrivate(
+                    operation.before,
+                    operation.after,
+                    record.payload,
+                  )
+                : operation.after;
+              if (record && equal(payload, record.payload)) {
+                saved = true;
+                break;
+              }
+              const result = await write(
+                name,
+                payload,
+                record?.revision ?? null,
+              );
+              if (!active()) return;
+              if (result) {
+                record = { payload, revision: result.revision };
+                saved = true;
+                break;
+              }
+              record = await read(name);
             }
-            const result = await write(name, payload, record?.revision ?? null);
-            if (!active()) return;
-            if (result) {
-              record = { payload, revision: result.revision };
-              saved = true;
-              break;
-            }
-            record = await read(name);
+            if (!saved)
+              throw Error(
+                "Cet espace est très actif. La modification reste en attente et sera réessayée.",
+              );
+            operations.splice(deferred, 1);
+            await persist(name, operations).catch(() => {});
+          } catch (error) {
+            if (!(error instanceof SyncConflict)) throw error;
+            deferred++;
           }
-          if (!saved)
-            throw Error(
-              "Cet espace est très actif. La modification reste en attente et sera réessayée.",
-            );
-          operations.shift();
-          await persist(name, operations).catch(() => {});
         }
+        if (deferred) throw new SyncConflict("pending");
         if (active()) {
           if (record) await apply(record.payload, name);
           status(
@@ -166,6 +185,21 @@ export function createPrivateSync({
         }
       } catch (error) {
         if (!active()) return;
+        // A draft conflict must never block reading the shared roster. Keep
+        // every queued draft, show independent additions, prefer the server
+        // only for conflicting fields, and continue retrying on future reads.
+        if (record) {
+          let visible = cloneData(record.payload);
+          for (const operation of operations)
+            visible = mergePrivate(
+              operation.before,
+              operation.after,
+              visible,
+              "",
+              true,
+            );
+          await apply(visible, name);
+        }
         status(
           `${operations.length ? "Modification en attente · " : "Connexion interrompue · "}${error.message}`,
           {
@@ -173,6 +207,7 @@ export function createPrivateSync({
             pending: operations.length,
             error: true,
             conflict: error instanceof SyncConflict,
+            loaded: Boolean(record),
           },
         );
       }

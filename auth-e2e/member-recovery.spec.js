@@ -56,7 +56,7 @@ test("existing laptop members can be published together without replacing shared
   });
   await page
     .getByRole("button", {
-      name: "Synchroniser les membres",
+      name: "Sauvegardes des membres",
       exact: true,
     })
     .click();
@@ -86,7 +86,7 @@ test("a laptop automatically publishes backed-up members into an empty shared ro
   });
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Synchroniser les membres", exact: true }),
+    page.getByRole("button", { name: "Sauvegardes des membres", exact: true }),
   ).toBeVisible();
   await page.evaluate(async () => {
     const db = await new Promise((resolve) => {
