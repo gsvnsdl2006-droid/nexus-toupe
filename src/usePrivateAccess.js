@@ -175,7 +175,9 @@ export default function usePrivateAccess(
       const refresh =
         patrol && names.includes(patrol)
           ? sync.current.synchronize(patrol)
-          : Promise.resolve();
+          : !patrol
+            ? Promise.all(names.map((name) => sync.current.synchronize(name)))
+            : Promise.resolve();
       if (isLeader(user)) {
         const [check, campCheck] = await Promise.all([
           timed(accessClient.rpc("leader_deletion_enabled")),
@@ -213,7 +215,12 @@ export default function usePrivateAccess(
       if (document.visibilityState !== "hidden") setAccessAttempt((n) => n + 1);
     };
     const timer = setInterval(() => {
-      if (!permissions.current.includes(currentPatrol.current)) retry();
+      if (
+        !permissions.current.length ||
+        (currentPatrol.current &&
+          !permissions.current.includes(currentPatrol.current))
+      )
+        retry();
     }, 10000);
     window.addEventListener("pageshow", retry);
     window.addEventListener("online", retry);
@@ -228,10 +235,17 @@ export default function usePrivateAccess(
     };
   }, [ready, user?.id, user?.email]);
   useEffect(() => {
-    if (!ready || loading || !user || !allowed.includes(patrol)) return;
+    if (
+      !ready ||
+      loading ||
+      !user ||
+      (patrol ? !allowed.includes(patrol) : !allowed.length)
+    )
+      return;
     const refresh = () => {
       if (document.visibilityState !== "hidden")
-        sync.current?.synchronize(patrol);
+        for (const name of patrol ? [patrol] : allowed)
+          sync.current?.synchronize(name);
     };
     refresh();
     const timer = setInterval(refresh, 10000);
@@ -261,6 +275,7 @@ export default function usePrivateAccess(
     return () => window.removeEventListener("beforeunload", warn);
   }, []);
   return {
+    loadedPatrols,
     membersReady:
       Boolean(user) &&
       verifiedIdentity === `${user.id}:${user.email}` &&

@@ -737,7 +737,10 @@ function App() {
                       <div className="card-bottom">
                         <span>
                           <Users size={14} />
-                          {q.members.length} membres
+                          {access.allowed.includes(name) &&
+                          !access.loadedPatrols.includes(name)
+                            ? "Chargement…"
+                            : `${q.members.length} membres`}
                         </span>
                         <span>
                           Entrer <ChevronRight size={14} />
