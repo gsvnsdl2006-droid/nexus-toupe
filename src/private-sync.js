@@ -90,6 +90,7 @@ export function createPrivateSync({
 }) {
   const queues = new Map(),
     jobs = new Map(),
+        refreshes = new Set(),
     persistence = new Map(),
     generations = new Map();
   async function queue(name) {
@@ -111,7 +112,11 @@ export function createPrivateSync({
     return next;
   }
   async function synchronize(name) {
-    if (jobs.has(name)) return jobs.get(name);
+        if (jobs.has(name)) {
+      refreshes.add(name);
+      return jobs.get(name);
+    }
+    refreshes.delete(name);
     const started = generations.get(name) || 0;
     const task = (async () => {
       const operations = await queue(name);
@@ -225,8 +230,9 @@ export function createPrivateSync({
       // Do not leave that edit waiting for the next polling interval.
       if (
         active() &&
-        (generations.get(name) || 0) !== started &&
-        (await queue(name)).length
+                (refreshes.has(name) ||
+          ((generations.get(name) || 0) !== started &&
+            (await queue(name)).length))
       )
         await synchronize(name);
     }
