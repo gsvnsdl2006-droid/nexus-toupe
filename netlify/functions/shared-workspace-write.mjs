@@ -1,10 +1,9 @@
 import { getStore } from "@netlify/blobs";
 import { createSharedWorkspaceHandler } from "../lib/shared-workspace.js";
-import { authorizeLeader } from "../lib/leader-auth.js";
 export default createSharedWorkspaceHandler({
   store: () =>
     getStore({ name: "nexus-shared-workspace-v1", consistency: "strong" }),
-  authorizeAdmin: authorizeLeader,
+  authorizeAdmin: async () => ({ ok: true }),
 });
 export const config = {
   rateLimit: {

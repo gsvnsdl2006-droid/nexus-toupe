@@ -98,21 +98,19 @@ export default function useBadgePhotos({ ready, user, onPhotos }) {
         const blocked = new Set();
         let remaining = (await vaultEntries()).filter((x) => x.pending);
         if (mounted.current) setPending(remaining.length);
-        if (!user || !remaining.length || !navigator.onLine) return;
+        if (!remaining.length || !navigator.onLine) return;
         if (mounted.current) setStatus("Sauvegarde permanente des photos…");
-        while (remaining.length && userId.current === user.id) {
-          const { data, error } = await accessClient.auth.getSession();
-          if (error || !data.session?.access_token)
-            throw Error(
-              "Reconnectez-vous pour terminer la sauvegarde. La photo reste conservée sur cet appareil.",
-            );
+        const uploader = user?.id;
+        while (remaining.length && userId.current === uploader) {
+          const auth = await accessClient?.auth.getSession();
+          const token = auth?.data.session?.access_token;
           for (const item of remaining) {
-            if (userId.current !== user.id) break;
+            if (userId.current !== uploader) break;
             const r = await fetch(`${endpoint}?badge=${item.badge}`, {
               method: "PUT",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${data.session.access_token}`,
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
               },
               body: JSON.stringify({
                 image: item.image,
@@ -209,11 +207,7 @@ export default function useBadgePhotos({ ready, user, onPhotos }) {
       );
       callback.current({ [badge]: image });
       setConflicts((ids) => ids.filter((id) => id !== badge));
-      setStatus(
-        user
-          ? "Photo conservée localement · sauvegarde permanente en attente"
-          : "Photo conservée sur cet appareil · connectez-vous pour sa sauvegarde permanente",
-      );
+      setStatus("Photo conservée localement · sauvegarde partagée en attente");
       setTick((n) => n + 1);
       if (navigator.storage?.persist)
         navigator.storage.persist().catch(() => {});

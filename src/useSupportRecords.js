@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { accessClient } from "./access";
 import { fetchWithTimeout } from "./browser-compat";
 export async function supportRequest(
   patrol,
@@ -80,20 +79,12 @@ export default function useSupportRecords(patrol, section) {
       window.removeEventListener("online", refresh);
     };
   }, [patrol, section]);
-  async function save(record, admin = false) {
+  async function save(record) {
     setSaving(true);
     setError("");
     setNotice("");
     try {
       const headers = { "Content-Type": "application/json" };
-      if (admin) {
-        const session = await accessClient?.auth.getSession();
-        if (!session?.data.session?.access_token)
-          throw Error(
-            "Connecte-toi avec l’un des deux comptes administrateurs.",
-          );
-        headers.Authorization = `Bearer ${session.data.session.access_token}`;
-      }
       const result = await supportRequest(patrol, section, {
         method: "POST",
         headers,

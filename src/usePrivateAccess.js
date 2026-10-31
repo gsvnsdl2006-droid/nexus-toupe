@@ -3,6 +3,7 @@ import { returnContextKey, loginReturnError } from "./auth-context.js";
 import { useEffect, useRef, useState } from "react";
 import { get, set } from "idb-keyval";
 import { accessClient, privatePayload } from "./access";
+import { patrols } from "./model";
 import { createPrivateSync } from "./private-sync";
 async function timed(query) {
   const controller = new AbortController();
@@ -22,6 +23,7 @@ export default function usePrivateAccess(
 ) {
   const [user, setUser] = useState(null),
     [allowed, setAllowed] = useState([]),
+    [publicRead, setPublicRead] = useState(false),
     [verifiedIdentity, setVerifiedIdentity] = useState(null),
     [loading, setLoading] = useState(Boolean(accessClient)),
     [status, setStatus] = useState(""),
@@ -34,6 +36,7 @@ export default function usePrivateAccess(
   const handler = useRef(onRemote),
     currentPatrol = useRef(patrol),
     permissions = useRef([]),
+    readable = useRef([]),
     sync = useRef(null),
     owner = useRef(null),
     unsaved = useRef(new Set());
@@ -70,7 +73,7 @@ export default function usePrivateAccess(
     setDeletionReady(false);
     setCampDeletionReady(false);
     if (!ready) return;
-    const identity = user ? `${user.id}:${user.email}` : null;
+    const identity = user ? `${user.id}:${user.email}` : "anonymous";
     if (owner.current?.identity !== identity) {
       if (owner.current) owner.current.active = false;
       sync.current = null;
@@ -79,7 +82,7 @@ export default function usePrivateAccess(
       setSyncInfo({ pending: 0, error: false });
       unsaved.current.clear();
     }
-    if (!accessClient || !user) {
+    if (!accessClient) {
       permissions.current = [];
       setAllowed([]);
       setVerifiedIdentity(null);
@@ -87,13 +90,18 @@ export default function usePrivateAccess(
     }
     setLoading(true);
     (async () => {
-      const a = await timed(
-        accessClient.from("patrol_access").select("patrol"),
-      );
+      const mode = await timed(accessClient.rpc("workspace_public_read_enabled"));
+      const isPublic = !mode.error && mode.data === true;
+      const a = user
+        ? await timed(accessClient.from("patrol_access").select("patrol"))
+        : { data: [], error: null };
       if (a.error) throw a.error;
       if (!active) return;
       const names = a.data.map((x) => x.patrol);
+      const visible = isPublic ? patrols : names;
+      readable.current = visible;
       permissions.current = names;
+      setPublicRead(isPublic);
       setAllowed(names);
       setVerifiedIdentity(identity);
       if (!sync.current) {
@@ -103,6 +111,7 @@ export default function usePrivateAccess(
         sync.current = createPrivateSync({
           active: () => sessionOwner.active,
           bootstrap: async (name, record) => {
+            if (!permissions.current.includes(name)) return null;
             const members = await recoverySource.current(name);
             if (!members.length) return null;
             const before = privatePayload(record?.payload || {});
@@ -114,14 +123,14 @@ export default function usePrivateAccess(
               .catch(() => []),
           storeQueue: (name, queue) => set(key(name), queue),
           read: async (name) => {
-            if (!permissions.current.includes(name))
-              throw Error("Accès refusé à cette patrouille.");
+            if (!readable.current.includes(name))
+              throw Error("Espace partagé indisponible.");
             // Fetch the actual shared payload. Older deployed clients may write
             // a payload without advancing revision, so revision-only caching
             // can leave a device permanently displaying an empty/old roster.
             const response = await timed(
               accessClient
-                .from("patrol_records")
+                .from(permissions.current.includes(name) ? "patrol_records" : "public_patrol_records")
                 .select("payload,revision")
                 .eq("patrol", name)
                 .maybeSingle(),
@@ -135,10 +144,20 @@ export default function usePrivateAccess(
               : null;
           },
           write: async (name, payload, prior) => {
-            if (!sessionOwner.active || !permissions.current.includes(name))
+            if (!sessionOwner.active)
               throw Error(
                 "Session interrompue. Reconnecte-toi pour réessayer.",
               );
+            if (!permissions.current.includes(name)) {
+              const result = await timed(accessClient.rpc("save_public_patrol", {
+                target_patrol: name,
+                expected_revision: prior,
+                public_members: payload.members || [],
+                public_incidents: payload.incidents || [],
+              }).maybeSingle());
+              if (result.error) throw result.error;
+              return result.data;
+            }
             const result =
               prior === null
                 ? await timed(
@@ -178,10 +197,10 @@ export default function usePrivateAccess(
         });
       }
       const refresh =
-        patrol && names.includes(patrol)
+        patrol && visible.includes(patrol)
           ? sync.current.synchronize(patrol)
           : !patrol
-            ? Promise.all(names.map((name) => sync.current.synchronize(name)))
+            ? Promise.all(visible.map((name) => sync.current.synchronize(name)))
             : Promise.resolve();
       if (isLeader(user)) {
         const [check, campCheck] = await Promise.all([
@@ -215,15 +234,15 @@ export default function usePrivateAccess(
     };
   }, [user?.id, user?.email, patrol, ready, accessAttempt]);
   useEffect(() => {
-    if (!ready || !user) return;
+    if (!ready || (!user && !publicRead)) return;
     const retry = () => {
       if (document.visibilityState !== "hidden") setAccessAttempt((n) => n + 1);
     };
     const timer = setInterval(() => {
       if (
-        !permissions.current.length ||
+        !readable.current.length ||
         (currentPatrol.current &&
-          !permissions.current.includes(currentPatrol.current))
+          !readable.current.includes(currentPatrol.current))
       )
         retry();
     }, 10000);
@@ -238,18 +257,18 @@ export default function usePrivateAccess(
       window.removeEventListener("focus", retry);
       document.removeEventListener("visibilitychange", retry);
     };
-  }, [ready, user?.id, user?.email]);
+  }, [ready, user?.id, user?.email, publicRead]);
   useEffect(() => {
     if (
       !ready ||
       loading ||
-      !user ||
-      (patrol ? !allowed.includes(patrol) : !allowed.length)
+      (!publicRead && !user) ||
+      (patrol ? !readable.current.includes(patrol) : !readable.current.length)
     )
       return;
     const refresh = () => {
       if (document.visibilityState !== "hidden")
-        for (const name of patrol ? [patrol] : allowed)
+        for (const name of patrol ? [patrol] : readable.current)
           sync.current?.synchronize(name);
     };
     refresh();
@@ -263,7 +282,7 @@ export default function usePrivateAccess(
       window.removeEventListener("online", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [patrol, section, user?.id, ready, loading, allowed]);
+  }, [patrol, section, user?.id, ready, loading, allowed, publicRead]);
   useEffect(
     () => () => {
       if (owner.current) owner.current.active = false;
@@ -281,11 +300,14 @@ export default function usePrivateAccess(
   }, []);
   return {
     loadedPatrols,
+    publicRead,
+    viewable: publicRead ? patrols : allowed,
     membersReady:
       !accessClient ||
-      (Boolean(user) &&
-        verifiedIdentity === `${user.id}:${user.email}` &&
-        allowed.includes(patrol) &&
+      ((publicRead ||
+        (Boolean(user) &&
+          verifiedIdentity === `${user.id}:${user.email}` &&
+          allowed.includes(patrol))) &&
         loadedPatrols.includes(patrol)),
     hasSharedAccess:
       Boolean(user) &&
@@ -303,7 +325,7 @@ export default function usePrivateAccess(
       verifiedIdentity === `${user.id}:${user.email}` &&
       allowed.includes(patrol),
     save: (p, previous) => {
-      if (sync.current && allowed.includes(patrol)) {
+      if (sync.current && readable.current.includes(patrol)) {
         unsaved.current.add(patrol);
         return sync.current.enqueue(patrol, previous, privatePayload(p));
       }
@@ -315,7 +337,7 @@ export default function usePrivateAccess(
       return sync.current.enqueue(name, previous, privatePayload(p));
     },
     refresh: () => {
-      if (!permissions.current.includes(patrol)) setAccessAttempt((n) => n + 1);
+      if (!readable.current.includes(patrol)) setAccessAttempt((n) => n + 1);
       else return sync.current?.synchronize(patrol);
     },
     sharedMembers: async (name) => {

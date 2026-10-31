@@ -1,9 +1,9 @@
 import { createSharedWorkspaceHandler } from "../netlify/lib/shared-workspace.js";
-export function sharedWorkspaceApi(store) {
+export function sharedWorkspaceApi(store, { publicEdits = true } = {}) {
   const handler = createSharedWorkspaceHandler({
     store: () => store,
     authorizeAdmin: async (request) => ({
-      ok: Boolean(request.headers.get("authorization")),
+      ok: publicEdits || Boolean(request.headers.get("authorization")),
       status: 403,
     }),
   });

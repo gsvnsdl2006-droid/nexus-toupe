@@ -2,6 +2,29 @@
 
 Application en français, mobile, pour Goélands, Lions, Guépards, Orcs, Renards et Taureaux. Node 24 recommandé.
 
+## Partage public et deux sections réservées
+
+Toute personne possédant le lien peut consulter et modifier les membres,
+la progression, les photos de badges, le catalogue, les logos, le Photographe,
+le Secouriste et l’Intendance, **sans compte ni connexion obligatoire**.
+Les sauvegardes sont communes aux appareils ; IndexedDB reste le cache hors ligne.
+
+**Trésorier et Secrétariat restent privés** : seuls les deux administrateurs et
+l’adresse assignée de la patrouille peuvent consulter et modifier leurs données.
+Les règles RLS existantes et la liste `patrol_access` ne sont pas élargies.
+Les suppressions administratives existantes conservent leur protection distincte.
+
+Avant de déployer cette version, exécuter une fois
+[`supabase/public-workspace.sql`](supabase/public-workspace.sql) dans le SQL Editor
+**du projet existant**. Cette migration réexécutable ne copie et ne réinitialise
+aucun enregistrement. Elle expose seulement les membres et les rapports de
+Secouriste dans une vue publique et permet d’enregistrer ces deux champs par une
+fonction avec contrôle de révision. Elle ne publie ni trésorerie, ni réunions,
+ni présences, ni dossiers de camp. Ne pas relancer `setup.sql` pour cette mise à jour.
+
+Les sections historiques ci-dessous décrivent les étapes précédentes ; la règle
+d’accès de cette section prévaut pour le partage public actuel.
+
 ## Démarrage
 
 ```sh

@@ -8,7 +8,7 @@ for (const email of [
   "troupeoriongsvn@gmail.com",
   "goelandaularge@gmail.com",
 ]) {
-  test(`equipment permissions and photos for ${email}`, async ({
+  test(`equipment stays publicly editable and shared for ${email}`, async ({
     page,
     browser,
   }) => {
@@ -19,21 +19,6 @@ for (const email of [
     await page.goto("/");
     await page.getByRole("button", { name: /PATROUILLE 01/ }).click();
     await page.getByRole("button", { name: "Intendance", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Ajouter du matériel", exact: true }),
-    ).toHaveCount(0);
-    await page
-      .getByRole("button", { name: "Connexion administrateur", exact: true })
-      .click();
-    await expect(
-      page.getByRole("heading", { name: "Intendance", exact: true }),
-    ).toBeVisible();
-    if (email === "goelandaularge@gmail.com") {
-      await expect(
-        page.getByRole("button", { name: "Ajouter du matériel", exact: true }),
-      ).toHaveCount(0);
-      return;
-    }
     await page
       .getByRole("button", { name: "Ajouter du matériel", exact: true })
       .click();
@@ -111,7 +96,7 @@ for (const email of [
         name: "Modifier le matériel Tente de patrouille",
         exact: true,
       }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await fresh.close();
   });
 }
