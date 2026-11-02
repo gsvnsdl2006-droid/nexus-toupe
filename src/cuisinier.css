@@ -1,0 +1,54 @@
+.cuisinier {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #78948155;
+  min-width: 0;
+}
+.cuisinier fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.cuisinier-recipes {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.cuisinier-recipe {
+  padding: 1rem;
+  border: 1px solid #78948155;
+  border-radius: 16px;
+  min-width: 0;
+}
+.cuisinier-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cuisinier-experiences {
+  margin-top: 1.5rem;
+}
+.cuisinier-experience {
+  padding: 1rem 0;
+  border-top: 1px solid #78948155;
+  overflow-wrap: anywhere;
+}
+.cuisinier-experience time {
+  display: block;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+.cuisinier-photo {
+  display: block;
+  max-width: 100%;
+  max-height: 450px;
+  object-fit: contain;
+  border-radius: 12px;
+  margin-top: 0.75rem;
+}
+.cuisinier button {
+  white-space: normal;
+  max-width: 100%;
+}

@@ -6,6 +6,7 @@ import { compressEventPhoto } from "./photographer-images";
 import useSupportRecords from "./useSupportRecords";
 import EquipmentPhoto from "./EquipmentPhoto";
 import SupportFeedback from "./SupportFeedback";
+import Cuisinier from "./Cuisinier";
 const fresh = () => ({
   id: randomId(),
   name: "",
@@ -13,7 +14,7 @@ const fresh = () => ({
   image: "",
   expectedVersion: null,
 });
-export default function Intendance({ patrol }) {
+export default function Intendance({ patrol, user, onSignIn }) {
   const state = useSupportRecords(patrols.indexOf(patrol), "equipment");
   const [draft, setDraft] = useState(null),
     [processing, setProcessing] = useState(false),
@@ -68,6 +69,10 @@ export default function Intendance({ patrol }) {
             <Package /> Intendance
           </h2>
           <p>Le matériel des {patrol}, ses photos et ses quantités.</p>
+          <a href="#cuisinier" onClick={(event) => {
+            event.preventDefault();
+            document.getElementById("cuisinier")?.scrollIntoView();
+          }}>Cuisinier · Recettes et expériences</a>
         </div>
         <button
           className="secondary"
@@ -225,6 +230,7 @@ export default function Intendance({ patrol }) {
           </article>
         ))}
       </div>
+      <Cuisinier patrol={patrol} user={user} onSignIn={onSignIn} />
     </section>
   );
 }
