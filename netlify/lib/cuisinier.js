@@ -37,12 +37,13 @@ async function body(request) {
 }
 function publicRecord(record) {
   const { image, fingerprint, ...result } = record;
+  if (!record.recipe) result.version = fingerprint;
   if (image)
     result.photo = `${endpoint}?patrol=${record.patrol}&recipe=${record.recipe}&experience=${record.id}&asset=photo`;
   return result;
 }
 
-// Separate, append-only recipe storage: no existing equipment/workspace records are modified.
+// Recipe mutations never modify equipment or other workspace records.
 export function createCuisinierHandler({
   store,
   authorize = authorizeLeader,
@@ -59,8 +60,10 @@ export function createCuisinierHandler({
       ? `experiences/${patrol}/${recipe}/`
       : `recipes/${patrol}/`;
     try {
-      if (recipe && !(await store().get(recipeKey(recipe), { type: "json" })))
-        return json({ error: "Recette introuvable." }, 404);
+      if (recipe) {
+        const parent = await store().get(recipeKey(recipe), { type: "json" });
+        if (!parent || parent.deleted) return json({ error: "Recette introuvable." }, 404);
+      }
       if (request.method === "GET") {
         if (url.searchParams.get("asset") === "photo") {
           const id = url.searchParams.get("experience");
@@ -90,12 +93,14 @@ export function createCuisinierHandler({
           page.map((key) => store().get(key, { type: "json" })),
         );
         return json({
-          records: records.filter(Boolean).map(publicRecord),
+          records: records.filter((record) => record && !record.deleted).map(publicRecord),
           cursor: keys.length > 20 ? page.at(-1).slice(prefix.length) : null,
         });
       }
-      if (request.method !== "POST")
+      const mutation = ["PATCH", "DELETE"].includes(request.method);
+      if (request.method !== "POST" && !mutation)
         return json({ error: "Méthode refusée." }, 405);
+      if (mutation && recipe) return json({ error: "Méthode refusée." }, 405);
       const origin = request.headers.get("origin");
       if (origin && origin !== url.origin)
         return json({ error: "Origine refusée." }, 403);
@@ -118,6 +123,28 @@ export function createCuisinierHandler({
       }
       if (!input || !uuid(input.id))
         return json({ error: "Fiche invalide." }, 400);
+      if (mutation) {
+        const key = recipeKey(input.id);
+        const existing = await store().getWithMetadata(key, { type: "json" });
+        if (!existing || existing.data.deleted) return json({ error: "Recette introuvable." }, 404);
+        if (!input.expectedVersion || input.expectedVersion !== existing.data.fingerprint)
+          return json({ error: "Cette recette a changé. Actualise avant de réessayer." }, 409);
+        let updated;
+        if (request.method === "DELETE") {
+          // A tombstone prevents delayed create retries from restoring a deleted recipe.
+          // Contributions remain stored but are no longer publicly accessible.
+          updated = { id: input.id, patrol: Number(patrol), deleted: true, createdAt: existing.data.createdAt };
+        } else {
+          if (!text(input.title, 120) || !text(input.ingredients, 10000) || !text(input.instructions, 20000))
+            return json({ error: "Complète le titre, les ingrédients et la préparation." }, 400);
+          updated = { id: input.id, patrol: Number(patrol), title: input.title.trim(), ingredients: input.ingredients.trim(), instructions: input.instructions.trim(), createdAt: existing.data.createdAt };
+        }
+        updated.updatedAt = now();
+        updated.fingerprint = createHash("sha256").update(JSON.stringify(updated)).digest("hex");
+        const saved = await store().setJSON(key, updated, { onlyIfMatch: existing.etag });
+        if (!saved.modified) return json({ error: "Cette recette a changé. Actualise avant de réessayer." }, 409);
+        return json(publicRecord(updated));
+      }
       let record;
       if (!recipe) {
         if (

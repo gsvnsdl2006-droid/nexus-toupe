@@ -7,9 +7,14 @@ are not trusted. Everyone may add an experience, a photo, or both to an existing
 recipe without signing in. A contributor name is optional and is not a verified
 identity.
 
-Recipes and contributions are append-only records in the new site-wide Netlify
-Blobs store `nexus-cuisinier-v1`. Conditional create-only writes prevent record
-replacement and make identical retries safe. Existing equipment, workspace,
+Recipes and contributions use the site-wide Netlify Blobs store
+`nexus-cuisinier-v1`. The two confirmed main admins may also edit or delete
+recipes, with revision checks to reject conflicting edits and a confirmation
+before deletion. Editing preserves existing photos and experiences. Deleted
+recipes use a tombstone to prevent delayed retries from restoring them; their
+contributions remain stored but are no longer publicly accessible.
+Contributions remain append-only. Conditional create-only writes make identical
+creation retries safe. Existing equipment, workspace,
 photographer, treasury and secretary stores and permissions are unchanged.
 Photos are re-encoded by the browser and checked on the server for JPEG/PNG/WebP
 signatures and a 450 KiB maximum. Lists return 20 records per page. Refresh on

@@ -38,6 +38,40 @@ const call = (
     ),
   );
 
+test("only confirmed admins edit/delete recipes; stale updates fail and contributions survive edits", async () => {
+  const store = supportStore();
+  const handler = createCuisinierHandler({ store: () => store, authorize: (request) => authorizeLeader(request, async () => {
+    const email = request.headers.get("authorization").slice(7);
+    return Response.json({ id: "verified", email: email === "unconfirmed" ? "gsvnsdl2006@gmail.com" : email, email_confirmed_at: email === "unconfirmed" ? null : "2026-01-01" });
+  }) });
+  const mutate = (method, input, email) => handler(new Request("https://nexus.example/.netlify/functions/cuisinier?patrol=0", {
+    method, headers: { "Content-Type": "application/json", ...(email ? { Authorization: `Bearer ${email}` } : {}) }, body: JSON.stringify(input),
+  }));
+  for (const email of ["gsvnsdl2006@gmail.com", "troupeoriongsvn@gmail.com"]) {
+    const item = { ...recipe, id: email.startsWith("gsv") ? recipe.id : "33333333-3333-4333-8333-333333333333" };
+    const created = await (await call(handler, 0, null, item, email)).json();
+    await call(handler, 0, item.id, experience);
+    const edit = { ...item, title: "Riz amélioré", expectedVersion: created.version };
+    for (const denied of [null, "goelandaularge@gmail.com", "unconfirmed"]) {
+      for (const method of ["PATCH", "DELETE"]) assert.equal((await mutate(method, edit, denied)).status, denied ? 403 : 401);
+    }
+    assert.equal((await mutate("PATCH", { ...edit, title: "" }, email)).status, 400);
+    const updatedResponse = await mutate("PATCH", edit, email);
+    assert.equal(updatedResponse.status, 200);
+    const updated = await updatedResponse.json();
+    assert.equal(updated.title, "Riz amélioré");
+    assert.equal((await (await call(handler, 0, item.id)).json()).records.length, 1);
+    assert.equal((await mutate("PATCH", edit, email)).status, 409);
+    assert.equal((await mutate("DELETE", edit, email)).status, 409);
+    assert.equal((await mutate("DELETE", { id: item.id, expectedVersion: updated.version }, email)).status, 200);
+    assert.equal((await call(handler, 0, item.id)).status, 404);
+    assert.equal((await call(handler, 0, item.id, experience)).status, 404);
+    assert.equal((await call(handler, 0, null, item, email)).status, 409);
+    assert.ok(store.data.has(`experiences/0/${item.id}/${experience.id}`));
+  }
+  assert.equal((await (await call(handler)).json()).records.length, 0);
+});
+
 test("only the two confirmed main admins can create recipes; public experiences cannot replace recipes", async () => {
   const store = supportStore();
   const handler = createCuisinierHandler({
@@ -168,7 +202,7 @@ test("invalid uploads, unknown recipes, cross-origin writes and invalid records 
       await handler(
         new Request(
           "https://nexus.example/.netlify/functions/cuisinier?patrol=0",
-          { method: "DELETE" },
+          { method: "PUT" },
         ),
       )
     ).status,

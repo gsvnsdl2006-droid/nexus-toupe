@@ -30,7 +30,7 @@ async function routeRecipes(page, store) {
       new Request(input.url(), {
         method: input.method(),
         headers: input.headers(),
-        ...(input.method() === "POST" ? { body: input.postData() } : {}),
+        ...(["POST", "PATCH", "DELETE"].includes(input.method()) ? { body: input.postData() } : {}),
       }),
     );
     await route.fulfill({
@@ -156,6 +156,23 @@ for (const email of ["gsvnsdl2006@gmail.com", "troupeoriongsvn@gmail.com"]) {
       await expect(phone.locator(".cuisinier-experience")).toContainText(
         "Délicieux après la marche !",
       );
+      await expect(phone.getByRole("button", { name: "Modifier la recette", exact: true })).toHaveCount(0);
+      await expect(phone.getByRole("button", { name: "Supprimer la recette", exact: true })).toHaveCount(0);
+      await page.getByRole("button", { name: "Modifier la recette", exact: true }).click();
+      await page.getByLabel("Nom de la recette", { exact: true }).fill("Riz amélioré");
+      await page.getByRole("button", { name: "Enregistrer la recette", exact: true }).click();
+      await expect(page.locator(".cuisinier-recipe h3")).toHaveText("Riz amélioré");
+      await expect(page.locator(".cuisinier-experience")).toContainText("Délicieux après la marche !");
+      await phone.getByRole("button", { name: "Actualiser les recettes", exact: true }).click();
+      await expect(phone.locator(".cuisinier-recipe h3")).toHaveText("Riz amélioré");
+      page.once("dialog", (dialog) => dialog.dismiss());
+      await page.getByRole("button", { name: "Supprimer la recette", exact: true }).click();
+      await expect(page.locator(".cuisinier-recipe")).toHaveCount(1);
+      page.once("dialog", (dialog) => dialog.accept());
+      await page.getByRole("button", { name: "Supprimer la recette", exact: true }).click();
+      await expect(page.locator(".cuisinier-recipe")).toHaveCount(0);
+      await phone.getByRole("button", { name: "Actualiser les recettes", exact: true }).click();
+      await expect(phone.locator(".cuisinier-recipe")).toHaveCount(0);
       for (const width of [320, 820, 1440]) {
         await phone.setViewportSize({ width, height: 900 });
         expect(

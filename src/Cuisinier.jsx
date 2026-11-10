@@ -8,7 +8,7 @@ import { compressEventPhoto } from "./photographer-images";
 import SupportFeedback from "./SupportFeedback";
 import "./cuisinier.css";
 
-async function request(patrol, recipe, record, admin = false, cursor = null) {
+async function request(patrol, recipe, record, admin = false, cursor = null, method = "POST") {
   const headers = { "Content-Type": "application/json" };
   if (admin) {
     const { data, error } = await accessClient.auth.getSession();
@@ -20,7 +20,7 @@ async function request(patrol, recipe, record, admin = false, cursor = null) {
   }
   const response = await fetchWithTimeout(
     `/.netlify/functions/cuisinier${record ? "-write" : ""}?patrol=${patrol}${recipe ? `&recipe=${recipe}` : ""}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
-    record ? { method: "POST", headers, body: JSON.stringify(record) } : {},
+    record ? { method, headers, body: JSON.stringify(record) } : {},
   );
   let result;
   try {
@@ -80,15 +80,15 @@ function useRecipes(patrol, recipe = null) {
       window.removeEventListener("online", refresh);
     };
   }, [patrol, recipe]);
-  async function save(record, admin = false) {
+  async function save(record, admin = false, method = "POST") {
     setSaving(true);
     setError("");
     setNotice("");
     try {
-      const result = await request(patrol, recipe, record, admin);
+      const result = await request(patrol, recipe, record, admin, null, method);
       generation.current++;
       setLoading(false);
-      setRecords((old) => [result, ...old.filter((r) => r.id !== result.id)]);
+      setRecords((old) => result.deleted ? old.filter((r) => r.id !== result.id) : [result, ...old.filter((r) => r.id !== result.id)]);
       setNotice("Enregistré dans l’espace partagé de la patrouille.");
       return true;
     } catch (e) {
@@ -296,10 +296,10 @@ export default function Cuisinier({ patrol, user, onSignIn }) {
           className="support-form"
           onSubmit={async (event) => {
             event.preventDefault();
-            if (await state.save(draft, true)) setDraft(null);
+            if (await state.save(draft, true, draft.expectedVersion ? "PATCH" : "POST")) setDraft(null);
           }}
         >
-          <h3>Nouvelle recette</h3>
+          <h3>{draft.expectedVersion ? "Modifier la recette" : "Nouvelle recette"}</h3>
           <fieldset disabled={state.saving}>
             <label>
               Nom de la recette
@@ -357,6 +357,16 @@ export default function Cuisinier({ patrol, user, onSignIn }) {
         {state.records.map((recipe) => (
           <article key={recipe.id} className="cuisinier-recipe">
             <h3>{recipe.title}</h3>
+            {admin && <div className="actions">
+              <button className="secondary" disabled={state.saving || Boolean(draft)} onClick={() => {
+                setDraft({ ...recipe, expectedVersion: recipe.version });
+                document.getElementById("cuisinier")?.scrollIntoView();
+              }}>Modifier la recette</button>
+              <button className="secondary" disabled={state.saving || Boolean(draft)} onClick={async () => {
+                if (!window.confirm(`Supprimer la recette « ${recipe.title} » ? Elle et ses photos et expériences ne seront plus visibles.`)) return;
+                if (await state.save({ id: recipe.id, expectedVersion: recipe.version }, true, "DELETE")) setSelected(null);
+              }}>Supprimer la recette</button>
+            </div>}
             <h4>Ingrédients</h4>
             <p className="cuisinier-text">{recipe.ingredients}</p>
             <h4>Préparation</h4>
